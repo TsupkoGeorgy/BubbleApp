@@ -1,7 +1,9 @@
 package org.example.bubbleapp
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +21,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
+import kotlin.math.atan2
 
 @Composable
 fun App() {
@@ -142,7 +151,7 @@ fun App() {
                 }
             }
 
-            // Оверлей с видео по центру экрана (как в Telegram)
+            // Оверлей с видео по центру экрана
             selectedVideo?.let { _ ->
                 inlinePlayer?.let { player ->
                     Box(
@@ -157,21 +166,18 @@ fun App() {
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        InlineVideoPlayerView(
-                            modifier = Modifier
-                                .size(250.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    // Toggle play/pause
-                                    if (isPlaying) {
-                                        inlinePlayer?.pause()
-                                        isPlaying = false
-                                    } else {
-                                        inlinePlayer?.play()
-                                        isPlaying = true
-                                    }
-                                },
-                            player = player
+                        CircularVideoPlayer(
+                            player = player,
+                            isPlaying = isPlaying,
+                            onTogglePlay = {
+                                if (isPlaying) {
+                                    inlinePlayer?.pause()
+                                    isPlaying = false
+                                } else {
+                                    inlinePlayer?.play()
+                                    isPlaying = true
+                                }
+                            }
                         )
                     }
                 }
@@ -206,6 +212,118 @@ fun VideoCircleItem(
     }
 }
 
+@Composable
+fun CircularVideoPlayer(
+    player: InlineVideoPlayer,
+    isPlaying: Boolean,
+    onTogglePlay: () -> Unit
+) {
+    val videoSize = 250.dp
+    val seekBarWidth = 6.dp
+    val totalSize = videoSize + seekBarWidth * 2 + 8.dp
+
+    var progress by remember { mutableStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+
+    // Обновление прогресса во время воспроизведения
+    LaunchedEffect(isPlaying, isDragging) {
+        while (isPlaying && !isDragging) {
+            val duration = player.getDuration()
+            if (duration > 0) {
+                progress = (player.getCurrentTime() / duration).toFloat().coerceIn(0f, 1f)
+            }
+            kotlinx.coroutines.delay(100)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .size(totalSize)
+            .clickable(enabled = false) { }, // Блокируем клик на фон
+        contentAlignment = Alignment.Center
+    ) {
+        // Круговой seek bar
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            progress = offsetToProgress(offset, center)
+                            val duration = player.getDuration()
+                            if (duration > 0) {
+                                player.seekTo(progress.toDouble() * duration)
+                            }
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            progress = offsetToProgress(change.position, center)
+                            val duration = player.getDuration()
+                            if (duration > 0) {
+                                player.seekTo(progress.toDouble() * duration)
+                            }
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                        }
+                    )
+                }
+        ) {
+            val strokeWidth = seekBarWidth.toPx()
+            val radius = (size.minDimension - strokeWidth) / 2
+            val topLeft = Offset(
+                (size.width - radius * 2) / 2,
+                (size.height - radius * 2) / 2
+            )
+            val arcSize = Size(radius * 2, radius * 2)
+
+            // Фоновая дорожка
+            drawArc(
+                color = Color.White.copy(alpha = 0.3f),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            )
+
+            // Прогресс
+            drawArc(
+                color = Color.White,
+                startAngle = -90f,
+                sweepAngle = 360f * progress,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            )
+        }
+
+        // Видео в центре
+        InlineVideoPlayerView(
+            modifier = Modifier
+                .size(videoSize)
+                .clip(CircleShape)
+                .clickable { onTogglePlay() },
+            player = player
+        )
+    }
+}
+
+// Конвертация позиции касания в прогресс (0-1), начало сверху, по часовой
+private fun offsetToProgress(offset: Offset, center: Offset): Float {
+    val dx = offset.x - center.x
+    val dy = offset.y - center.y
+    // atan2 возвращает угол от -PI до PI, 0 справа
+    // Нам нужно: 0 сверху, по часовой стрелке
+    var angle = atan2(dx.toDouble(), -dy.toDouble()) // -dy чтобы 0 был сверху
+    if (angle < 0) angle += 2 * PI
+    return (angle / (2 * PI)).toFloat()
+}
 
 // commonMain
 interface CameraController {
@@ -245,6 +363,9 @@ expect fun InlineVideoPlayerView(
 expect class InlineVideoPlayer(fileName: String) {
     fun play()
     fun pause()
+    fun getDuration(): Double
+    fun getCurrentTime(): Double
+    fun seekTo(seconds: Double)
 }
 
 @Composable

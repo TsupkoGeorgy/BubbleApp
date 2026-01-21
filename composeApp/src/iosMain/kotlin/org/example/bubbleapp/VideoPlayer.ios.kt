@@ -73,6 +73,26 @@ class InlineVideoViewController(
         player.pause()
     }
 
+    @OptIn(ExperimentalForeignApi::class)
+    fun getDuration(): Double {
+        val duration = player.currentItem?.duration ?: return 0.0
+        val seconds = platform.CoreMedia.CMTimeGetSeconds(duration)
+        return if (seconds.isNaN() || seconds.isInfinite()) 0.0 else seconds
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    fun getCurrentTime(): Double {
+        val time = player.currentTime()
+        val seconds = platform.CoreMedia.CMTimeGetSeconds(time)
+        return if (seconds.isNaN() || seconds.isInfinite()) 0.0 else seconds
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    fun seekTo(seconds: Double) {
+        val time = CMTimeMake(value = (seconds * 1000).toLong(), timescale = 1000)
+        player.seekToTime(time)
+    }
+
     override fun viewWillDisappear(animated: Boolean) {
         super.viewWillDisappear(animated)
         player.pause()
@@ -94,6 +114,10 @@ actual class InlineVideoPlayer actual constructor(fileName: String) {
     actual fun pause() {
         viewController.pause()
     }
+
+    actual fun getDuration(): Double = viewController.getDuration()
+    actual fun getCurrentTime(): Double = viewController.getCurrentTime()
+    actual fun seekTo(seconds: Double) = viewController.seekTo(seconds)
 }
 
 @Composable
