@@ -1,15 +1,30 @@
 package org.example.bubbleapp
 
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.viewinterop.UIKitViewController
 import kotlinx.cinterop.ExperimentalForeignApi
+import org.example.bubbleapp.storage.IOSFileSystemManager
+import org.example.bubbleapp.video.IOSThumbnailGenerator
+import org.example.bubbleapp.video.ThumbnailGenerator
 import platform.AVFoundation.*
 import platform.AVKit.AVPlayerViewController
-import platform.Foundation.*
+import platform.Foundation.NSURL
 import platform.UIKit.*
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
+
+// Singleton instances for reuse
+private val fileSystemManager = IOSFileSystemManager()
+private val thumbnailGenerator: ThumbnailGenerator = IOSThumbnailGenerator(fileSystemManager)
 
 class InlineVideoViewController(
     private val videoUrl: NSURL
@@ -24,9 +39,7 @@ class InlineVideoViewController(
 
     override fun viewDidLoad() {
         super.viewDidLoad()
-
         view.backgroundColor = UIColor.blackColor
-
         addChildViewController(playerVC)
         view.addSubview(playerVC.view)
         playerVC.didMoveToParentViewController(this)
@@ -59,19 +72,11 @@ class InlineVideoViewController(
     }
 }
 
-actual class InlineVideoPlayer actual constructor(
-    fileName: String
-) {
+actual class InlineVideoPlayer actual constructor(fileName: String) {
     val viewController: InlineVideoViewController
 
     init {
-        val documentsDir = NSSearchPathForDirectoriesInDomains(
-            NSDocumentDirectory,
-            NSUserDomainMask,
-            true
-        ).firstOrNull() ?: error("Documents dir not found")
-
-        val url = NSURL.fileURLWithPath("$documentsDir/$fileName")
+        val url = fileSystemManager.getVideoFileUrl(fileName)
         viewController = InlineVideoViewController(url)
     }
 
@@ -93,4 +98,32 @@ actual fun InlineVideoPlayerView(
         modifier = modifier,
         factory = { player.viewController }
     )
+}
+
+@Composable
+actual fun VideoThumbnail(
+    fileName: String,
+    modifier: Modifier
+) {
+    var thumbnail by remember(fileName) { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(fileName) {
+        // Check cache first, then generate if needed
+        thumbnail = thumbnailGenerator.getCachedThumbnail(fileName)
+            ?: thumbnailGenerator.generateThumbnail(fileName)
+    }
+
+    Box(
+        modifier = modifier.background(Color.DarkGray),
+        contentAlignment = Alignment.Center
+    ) {
+        thumbnail?.let { bitmap ->
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+    }
 }
