@@ -5,14 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -112,10 +110,10 @@ fun App() {
                             Text("Нет записей")
                         }
                     } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             items(recordedVideos) { videoName ->
                                 VideoCircleItem(
@@ -190,23 +188,21 @@ fun VideoCircleItem(
 ) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(CircleShape)
-            .clickable { onClick() },
+            .size(100.dp)
+            .clip(CircleShape),
         contentAlignment = Alignment.Center
     ) {
         VideoPreviewPlayer(
             fileName = videoName,
             modifier = Modifier.fillMaxSize()
         )
-        if (isSelected) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0x806200EE))
-            )
-        }
+        // Прозрачный слой для перехвата нажатий поверх видео
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable { onClick() }
+                .background(if (isSelected) Color(0x806200EE) else Color.Transparent)
+        )
     }
 }
 

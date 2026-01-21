@@ -45,7 +45,9 @@ class InlineVideoViewController(
     override fun viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor.blackColor
+        view.userInteractionEnabled = false
         addChildViewController(playerVC)
+        playerVC.view.userInteractionEnabled = false
         view.addSubview(playerVC.view)
         playerVC.didMoveToParentViewController(this)
     }
@@ -157,7 +159,9 @@ class VideoPreviewViewController(
     override fun viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor.clearColor
+        view.userInteractionEnabled = false
         playerVC.view.backgroundColor = UIColor.clearColor
+        playerVC.view.userInteractionEnabled = false
 
         // Hide player view until ready
         playerVC.view.alpha = 0.0
