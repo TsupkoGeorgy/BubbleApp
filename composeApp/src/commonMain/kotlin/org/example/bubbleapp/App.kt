@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -189,12 +190,13 @@ fun VideoCircleItem(
 ) {
     Box(
         modifier = Modifier
-            .size(80.dp)
+            .fillMaxWidth()
+            .aspectRatio(1f)
             .clip(CircleShape)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        VideoThumbnail(
+        VideoPreviewPlayer(
             fileName = videoName,
             modifier = Modifier.fillMaxSize()
         )
@@ -251,6 +253,12 @@ expect class InlineVideoPlayer(fileName: String) {
 
 @Composable
 expect fun VideoThumbnail(
+    fileName: String,
+    modifier: Modifier = Modifier
+)
+
+@Composable
+expect fun VideoPreviewPlayer(
     fileName: String,
     modifier: Modifier = Modifier
 )

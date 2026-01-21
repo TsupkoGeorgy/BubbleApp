@@ -17,10 +17,13 @@ import org.example.bubbleapp.video.IOSThumbnailGenerator
 import org.example.bubbleapp.video.ThumbnailGenerator
 import platform.AVFoundation.*
 import platform.AVKit.AVPlayerViewController
+import platform.CoreMedia.CMTimeMake
+import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSURL
 import platform.UIKit.*
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
+import platform.darwin.NSObject
 
 // Singleton instances for reuse
 private val fileSystemManager = IOSFileSystemManager()
@@ -126,4 +129,86 @@ actual fun VideoThumbnail(
             )
         }
     }
+}
+
+// Silent looping video preview player
+class VideoPreviewViewController(
+    private val videoUrl: NSURL
+) : UIViewController(null, null) {
+
+    private val player = AVPlayer(uRL = videoUrl).apply {
+        setMuted(true)
+    }
+
+    private val playerVC = AVPlayerViewController().apply {
+        player = this@VideoPreviewViewController.player
+        showsPlaybackControls = false
+        videoGravity = AVLayerVideoGravityResizeAspectFill
+    }
+
+    private var loopObserver: Any? = null
+
+    @OptIn(ExperimentalForeignApi::class)
+    override fun viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor.blackColor
+        addChildViewController(playerVC)
+        view.addSubview(playerVC.view)
+        playerVC.didMoveToParentViewController(this)
+
+        // Setup loop - seek to beginning when video ends
+        loopObserver = NSNotificationCenter.defaultCenter.addObserverForName(
+            name = AVPlayerItemDidPlayToEndTimeNotification,
+            `object` = player.currentItem,
+            queue = null
+        ) { _ ->
+            val zeroTime = CMTimeMake(value = 0, timescale = 1)
+            player.seekToTime(zeroTime)
+            player.play()
+        }
+    }
+
+    override fun viewDidAppear(animated: Boolean) {
+        super.viewDidAppear(animated)
+        player.play()
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    override fun viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        playerVC.view.setFrame(view.bounds)
+    }
+
+    override fun viewWillDisappear(animated: Boolean) {
+        super.viewWillDisappear(animated)
+        player.pause()
+    }
+
+    fun cleanup() {
+        loopObserver?.let {
+            NSNotificationCenter.defaultCenter.removeObserver(it)
+        }
+        loopObserver = null
+        player.pause()
+    }
+}
+
+@Composable
+actual fun VideoPreviewPlayer(
+    fileName: String,
+    modifier: Modifier
+) {
+    val url = remember(fileName) { fileSystemManager.getVideoFileUrl(fileName) }
+    val controller = remember(fileName) { VideoPreviewViewController(url) }
+
+    DisposableEffect(fileName) {
+        onDispose {
+            controller.cleanup()
+        }
+    }
+
+    UIKitViewController(
+        modifier = modifier,
+        factory = { controller }
+    )
 }
