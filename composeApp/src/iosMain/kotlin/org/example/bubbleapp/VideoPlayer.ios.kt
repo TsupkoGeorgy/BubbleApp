@@ -4,12 +4,14 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.UIKitViewController
 import kotlinx.cinterop.ExperimentalForeignApi
 import org.example.bubbleapp.storage.IOSFileSystemManager
@@ -131,12 +133,14 @@ actual fun VideoThumbnail(
     }
 }
 
-// Silent looping video preview player
+// Silent looping video preview player with ready state tracking
 class VideoPreviewViewController(
-    private val videoUrl: NSURL
+    private val videoUrl: NSURL,
+    private val onReadyToPlay: () -> Unit
 ) : UIViewController(null, null) {
 
-    private val player = AVPlayer(uRL = videoUrl).apply {
+    private val playerItem = AVPlayerItem(uRL = videoUrl)
+    private val player = AVPlayer(playerItem = playerItem).apply {
         setMuted(true)
     }
 
@@ -147,11 +151,17 @@ class VideoPreviewViewController(
     }
 
     private var loopObserver: Any? = null
+    private var isReady = false
 
     @OptIn(ExperimentalForeignApi::class)
     override fun viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor.blackColor
+        view.backgroundColor = UIColor.clearColor
+        playerVC.view.backgroundColor = UIColor.clearColor
+
+        // Hide player view until ready
+        playerVC.view.alpha = 0.0
+
         addChildViewController(playerVC)
         view.addSubview(playerVC.view)
         playerVC.didMoveToParentViewController(this)
@@ -159,18 +169,50 @@ class VideoPreviewViewController(
         // Setup loop - seek to beginning when video ends
         loopObserver = NSNotificationCenter.defaultCenter.addObserverForName(
             name = AVPlayerItemDidPlayToEndTimeNotification,
-            `object` = player.currentItem,
+            `object` = playerItem,
             queue = null
         ) { _ ->
             val zeroTime = CMTimeMake(value = 0, timescale = 1)
             player.seekToTime(zeroTime)
             player.play()
         }
+
+        // Check status periodically until ready
+        checkReadyStatus()
+    }
+
+    private fun checkReadyStatus() {
+        if (isReady) return
+
+        if (playerItem.status == AVPlayerItemStatusReadyToPlay) {
+            isReady = true
+            dispatch_async(dispatch_get_main_queue()) {
+                player.play()
+                onReadyToPlay()
+            }
+        } else {
+            // Check again after short delay
+            dispatch_async(dispatch_get_main_queue()) {
+                if (!isReady) {
+                    checkReadyStatus()
+                }
+            }
+        }
+    }
+
+    fun showPlayer() {
+        dispatch_async(dispatch_get_main_queue()) {
+            UIView.animateWithDuration(0.3) {
+                playerVC.view.alpha = 1.0
+            }
+        }
     }
 
     override fun viewDidAppear(animated: Boolean) {
         super.viewDidAppear(animated)
-        player.play()
+        if (isReady) {
+            player.play()
+        }
     }
 
     @OptIn(ExperimentalForeignApi::class)
@@ -185,6 +227,7 @@ class VideoPreviewViewController(
     }
 
     fun cleanup() {
+        isReady = true // Stop checking
         loopObserver?.let {
             NSNotificationCenter.defaultCenter.removeObserver(it)
         }
@@ -198,8 +241,21 @@ actual fun VideoPreviewPlayer(
     fileName: String,
     modifier: Modifier
 ) {
+    var isVideoReady by remember(fileName) { mutableStateOf(false) }
+    var minDelayPassed by remember(fileName) { mutableStateOf(false) }
+
+    // Minimum delay for smooth UX
+    LaunchedEffect(fileName) {
+        kotlinx.coroutines.delay(1500)
+        minDelayPassed = true
+    }
+
     val url = remember(fileName) { fileSystemManager.getVideoFileUrl(fileName) }
-    val controller = remember(fileName) { VideoPreviewViewController(url) }
+    val controller = remember(fileName) {
+        VideoPreviewViewController(url) {
+            isVideoReady = true
+        }
+    }
 
     DisposableEffect(fileName) {
         onDispose {
@@ -207,8 +263,32 @@ actual fun VideoPreviewPlayer(
         }
     }
 
-    UIKitViewController(
-        modifier = modifier,
-        factory = { controller }
-    )
+    val showVideo = isVideoReady && minDelayPassed
+
+    Box(
+        modifier = modifier.background(Color.DarkGray),
+        contentAlignment = Alignment.Center
+    ) {
+        // Video layer (hidden until ready via alpha in controller)
+        UIKitViewController(
+            modifier = Modifier.fillMaxSize(),
+            factory = { controller }
+        )
+
+        // Loading indicator until video is ready AND min delay passed
+        if (!showVideo) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = Color.White,
+                strokeWidth = 2.dp
+            )
+        }
+    }
+
+    // Show video only after both conditions met
+    LaunchedEffect(showVideo) {
+        if (showVideo) {
+            controller.showPlayer()
+        }
+    }
 }
