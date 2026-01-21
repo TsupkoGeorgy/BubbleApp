@@ -237,49 +237,55 @@ class IOSCameraController(
     }
 
     override fun startRecording() {
-        if (!captureSession.running || isRecording) return
+        dispatch_async(sessionQueue) {
+            if (!captureSession.running || isRecording) return@dispatch_async
 
-        val fileName = fileSystemManager.generateVideoFileName()
-        val fileUrl = fileSystemManager.getVideoFileUrl(fileName)
-        currentVideoUrl = fileUrl
+            val fileName = fileSystemManager.generateVideoFileName()
+            val fileUrl = fileSystemManager.getVideoFileUrl(fileName)
+            currentVideoUrl = fileUrl
 
-        // Remove existing file if present
-        fileSystemManager.deleteFile(fileUrl)
+            // Remove existing file if present
+            fileSystemManager.deleteFile(fileUrl)
 
-        if (!encodingManager.startEncoding(fileUrl)) {
-            println("IOSCameraController: Failed to start encoding")
-            return
+            if (!encodingManager.startEncoding(fileUrl)) {
+                println("IOSCameraController: Failed to start encoding")
+                return@dispatch_async
+            }
+
+            isRecording = true
+            println("IOSCameraController: Recording started")
         }
-
-        isRecording = true
     }
 
     override fun stopRecording() {
-        if (!isRecording) return
-        isRecording = false
+        dispatch_async(sessionQueue) {
+            if (!isRecording) return@dispatch_async
+            isRecording = false
 
-        val url = currentVideoUrl ?: return
+            val url = currentVideoUrl ?: return@dispatch_async
 
-        encodingManager.finishEncoding { success, error ->
-            if (success) {
-                val path = url.path ?: return@finishEncoding
-                val fileName = path.substringAfterLast("/")
-                val fileSize = fileSystemManager.getFileSize(url)
+            encodingManager.finishEncoding { success, error ->
+                if (success) {
+                    val path = url.path ?: return@finishEncoding
+                    val fileName = path.substringAfterLast("/")
+                    val fileSize = fileSystemManager.getFileSize(url)
 
-                println("IOSCameraController: Recording saved - $fileName ($fileSize bytes)")
-                onVideoRecorded?.invoke(fileName, fileSize)
-            } else {
-                println("IOSCameraController: Recording failed - $error")
+                    println("IOSCameraController: Recording saved - $fileName ($fileSize bytes)")
+                    onVideoRecorded?.invoke(fileName, fileSize)
+                } else {
+                    println("IOSCameraController: Recording failed - $error")
+                }
+
+                currentVideoUrl = null
             }
-
-            currentVideoUrl = null
         }
     }
 
     override fun stopCamera() {
         dispatch_async(sessionQueue) {
             if (isRecording) {
-                stopRecording()
+                isRecording = false
+                encodingManager.cancelEncoding()
             }
             captureSession.stopRunning()
         }
