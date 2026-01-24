@@ -1,5 +1,11 @@
 package org.example.bubbleapp
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -7,15 +13,27 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,9 +45,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.example.bubbleapp.call.CallManager
+import org.example.bubbleapp.call.CallState
 import kotlin.math.PI
 import kotlin.math.atan2
+
+// Навигация
+enum class Screen {
+    Home,
+    Bubbles,
+    Calls
+}
 
 // Состояние транскрипции
 enum class TranscriptionState {
@@ -52,152 +82,802 @@ expect fun getCachedTranscription(fileName: String): String?
 @Composable
 fun App() {
     MaterialTheme {
-        val cameraController = rememberCameraController()
-        var showCamera by remember { mutableStateOf(false) }
-        var recordedVideos by remember { mutableStateOf<List<String>>(emptyList()) }
-        var selectedVideo by remember { mutableStateOf<String?>(null) }
-        var inlinePlayer by remember { mutableStateOf<InlineVideoPlayer?>(null) }
-        var isPlaying by remember { mutableStateOf(false) }
+        var currentScreen by remember { mutableStateOf(Screen.Home) }
 
-        LaunchedEffect(cameraController) {
-            cameraController.onCameraReady = {
-                cameraController.startRecording()
+        AnimatedContent(
+            targetState = currentScreen,
+            transitionSpec = {
+                if (targetState == Screen.Home) {
+                    (slideInHorizontally { -it } + fadeIn()) togetherWith
+                            (slideOutHorizontally { it } + fadeOut())
+                } else {
+                    (slideInHorizontally { it } + fadeIn()) togetherWith
+                            (slideOutHorizontally { -it } + fadeOut())
+                }
             }
-
-            cameraController.onVideoRecorded = { _, _ ->
-                recordedVideos = cameraController.getRecordedVideos()
+        ) { screen ->
+            when (screen) {
+                Screen.Home -> HomeScreen(
+                    onNavigateToBubbles = { currentScreen = Screen.Bubbles },
+                    onNavigateToCalls = { currentScreen = Screen.Calls }
+                )
+                Screen.Bubbles -> BubblesScreen(
+                    onBack = { currentScreen = Screen.Home }
+                )
+                Screen.Calls -> CallsScreen(
+                    onBack = { currentScreen = Screen.Home }
+                )
             }
         }
+    }
+}
 
-        LaunchedEffect(Unit) {
-            recordedVideos = cameraController.getRecordedVideos()
-        }
+@Composable
+fun HomeScreen(
+    onNavigateToBubbles: () -> Unit,
+    onNavigateToCalls: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF1a1a2e)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(32.dp)
+        ) {
+            Text(
+                text = "Bubble",
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(16.dp)
+            Spacer(modifier = Modifier.height(48.dp))
+
+            // Кнопка кружков
+            Card(
+                modifier = Modifier
+                    .width(280.dp)
+                    .clickable { onNavigateToBubbles() },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF6C63FF)
+                )
             ) {
-                // Верхняя часть - кнопка записи и камера
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                        .padding(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(onClick = {
-                        if (!showCamera) {
-                            showCamera = true
-                        } else {
-                            cameraController.stopRecording()
-                            showCamera = false
-                        }
-                    }) {
-                        Text(if (showCamera) "Остановить" else "Записать")
-                    }
-
-                    if (showCamera) {
-                        Button(
-                            onClick = { cameraController.switchCamera() },
-                            modifier = Modifier.padding(top = 8.dp)
-                        ) {
-                            Text("Повернуть")
-                        }
-                        CameraPreview(
-                            modifier = Modifier
-                                .padding(top = 8.dp)
-                                .size(300.dp)
-                                .clip(CircleShape),
-                            cameraController = cameraController,
-                            onPreviewReady = {
-                                cameraController.startCamera()
-                            }
-                        )
-                    }
-                }
-
-                // Нижняя часть - грид с записанными кружками
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(top = 16.dp)
-                ) {
-                    Text(
-                        text = "Записи (${recordedVideos.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    if (recordedVideos.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Нет записей")
-                        }
-                    } else {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(recordedVideos) { videoName ->
-                                VideoCircleItem(
-                                    videoName = videoName,
-                                    isSelected = videoName == selectedVideo,
-                                    onClick = {
-                                        if (selectedVideo == videoName) {
-                                            // Закрыть
-                                            inlinePlayer?.pause()
-                                            inlinePlayer = null
-                                            selectedVideo = null
-                                            isPlaying = false
-                                        } else {
-                                            // Новое видео
-                                            inlinePlayer?.pause()
-                                            inlinePlayer = InlineVideoPlayer(videoName)
-                                            inlinePlayer?.play()
-                                            selectedVideo = videoName
-                                            isPlaying = true
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Оверлей с видео по центру экрана
-            selectedVideo?.let { _ ->
-                inlinePlayer?.let { player ->
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0x80000000))
-                            .clickable {
-                                inlinePlayer?.pause()
-                                inlinePlayer = null
-                                selectedVideo = null
-                                isPlaying = false
-                            },
+                            .size(56.dp)
+                            .background(Color.White.copy(alpha = 0.2f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularVideoPlayer(
-                            player = player,
-                            isPlaying = isPlaying,
-                            onTogglePlay = {
-                                if (isPlaying) {
-                                    inlinePlayer?.pause()
-                                    isPlaying = false
-                                } else {
-                                    inlinePlayer?.play()
-                                    isPlaying = true
-                                }
-                            }
+                        Text(
+                            text = "O",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
                     }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Кружки",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Записывай видео",
+                            fontSize = 14.sp,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+
+            // Кнопка звонков
+            Card(
+                modifier = Modifier
+                    .width(280.dp)
+                    .clickable { onNavigateToCalls() },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF00C9A7)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "C",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Звонки",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Аудио через интернет",
+                            fontSize = 14.sp,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CallsScreen(
+    onBack: () -> Unit
+) {
+    val callManager = remember { CallManager() }
+    val callState by callManager.callState.collectAsState()
+    val currentCallerId by callManager.currentCallerId.collectAsState()
+    val currentCallerName by callManager.currentCallerName.collectAsState()
+    val isMuted by callManager.isMuted.collectAsState()
+    val isSpeakerOn by callManager.isSpeakerOn.collectAsState()
+
+    var serverUrl by remember { mutableStateOf("ws://192.168.0.199:8080/call") }
+    var userId by remember { mutableStateOf("") }
+    var userName by remember { mutableStateOf("") }
+    var targetUserId by remember { mutableStateOf("") }
+    var isConnected by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            callManager.disconnect()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF1a1a2e))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            // Верхняя панель
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "<",
+                    fontSize = 24.sp,
+                    color = Color.White,
+                    modifier = Modifier
+                        .clickable { onBack() }
+                        .padding(8.dp)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = "Звонки",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            when {
+                // Активный звонок
+                callState == CallState.ACTIVE || callState == CallState.CONNECTING -> {
+                    ActiveCallUI(
+                        callerName = currentCallerName ?: currentCallerId ?: "Unknown",
+                        callState = callState,
+                        isMuted = isMuted,
+                        isSpeakerOn = isSpeakerOn,
+                        onToggleMute = { callManager.toggleMute() },
+                        onToggleSpeaker = { callManager.toggleSpeaker() },
+                        onEndCall = { callManager.endCall() }
+                    )
+                }
+
+                // Входящий звонок
+                callState == CallState.RINGING -> {
+                    IncomingCallUI(
+                        callerName = currentCallerName ?: "Unknown",
+                        onAccept = { callManager.acceptCall() },
+                        onReject = { callManager.rejectCall() }
+                    )
+                }
+
+                // Исходящий звонок (ожидание)
+                callState == CallState.CALLING -> {
+                    OutgoingCallUI(
+                        targetUser = targetUserId,
+                        onCancel = { callManager.endCall() }
+                    )
+                }
+
+                // Не подключен к серверу
+                !isConnected -> {
+                    ConnectionUI(
+                        serverUrl = serverUrl,
+                        userId = userId,
+                        userName = userName,
+                        onServerUrlChange = { serverUrl = it },
+                        onUserIdChange = { userId = it },
+                        onUserNameChange = { userName = it },
+                        onConnect = {
+                            if (userId.isNotBlank() && userName.isNotBlank()) {
+                                callManager.connect(serverUrl, userId, userName)
+                                isConnected = true
+                            }
+                        }
+                    )
+                }
+
+                // Подключен, можно звонить
+                else -> {
+                    DialUI(
+                        userId = userId,
+                        targetUserId = targetUserId,
+                        onTargetUserIdChange = { targetUserId = it },
+                        onCall = {
+                            if (targetUserId.isNotBlank()) {
+                                callManager.startCall(targetUserId)
+                            }
+                        },
+                        onDisconnect = {
+                            callManager.disconnect()
+                            isConnected = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectionUI(
+    serverUrl: String,
+    userId: String,
+    userName: String,
+    onServerUrlChange: (String) -> Unit,
+    onUserIdChange: (String) -> Unit,
+    onUserNameChange: (String) -> Unit,
+    onConnect: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "Подключение к серверу",
+            fontSize = 18.sp,
+            color = Color.White
+        )
+
+        OutlinedTextField(
+            value = serverUrl,
+            onValueChange = onServerUrlChange,
+            label = { Text("Сервер") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFF00C9A7),
+                unfocusedBorderColor = Color.Gray,
+                focusedLabelColor = Color(0xFF00C9A7),
+                unfocusedLabelColor = Color.Gray,
+                cursorColor = Color.White
+            )
+        )
+
+        OutlinedTextField(
+            value = userId,
+            onValueChange = onUserIdChange,
+            label = { Text("Ваш ID") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFF00C9A7),
+                unfocusedBorderColor = Color.Gray,
+                focusedLabelColor = Color(0xFF00C9A7),
+                unfocusedLabelColor = Color.Gray,
+                cursorColor = Color.White
+            )
+        )
+
+        OutlinedTextField(
+            value = userName,
+            onValueChange = onUserNameChange,
+            label = { Text("Ваше имя") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFF00C9A7),
+                unfocusedBorderColor = Color.Gray,
+                focusedLabelColor = Color(0xFF00C9A7),
+                unfocusedLabelColor = Color.Gray,
+                cursorColor = Color.White
+            )
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onConnect,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF00C9A7)
+            )
+        ) {
+            Text("Подключиться", fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+private fun DialUI(
+    userId: String,
+    targetUserId: String,
+    onTargetUserIdChange: (String) -> Unit,
+    onCall: () -> Unit,
+    onDisconnect: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Вы: $userId",
+            fontSize = 16.sp,
+            color = Color.White.copy(alpha = 0.7f)
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        OutlinedTextField(
+            value = targetUserId,
+            onValueChange = onTargetUserIdChange,
+            label = { Text("ID собеседника") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFF00C9A7),
+                unfocusedBorderColor = Color.Gray,
+                focusedLabelColor = Color(0xFF00C9A7),
+                unfocusedLabelColor = Color.Gray,
+                cursorColor = Color.White
+            )
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = onCall,
+            modifier = Modifier
+                .size(100.dp),
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF4CAF50)
+            )
+        ) {
+            Text("C", fontSize = 32.sp, color = Color.White)
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Button(
+            onClick = onDisconnect,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Gray
+            )
+        ) {
+            Text("Отключиться")
+        }
+    }
+}
+
+@Composable
+private fun IncomingCallUI(
+    callerName: String,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Входящий звонок",
+            fontSize = 18.sp,
+            color = Color.White.copy(alpha = 0.7f)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = callerName,
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+
+        Spacer(modifier = Modifier.height(64.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(48.dp)
+        ) {
+            // Отклонить
+            Button(
+                onClick = onReject,
+                modifier = Modifier.size(72.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF44336)
+                )
+            ) {
+                Text("X", fontSize = 24.sp)
+            }
+
+            // Принять
+            Button(
+                onClick = onAccept,
+                modifier = Modifier.size(72.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50)
+                )
+            ) {
+                Text("V", fontSize = 24.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutgoingCallUI(
+    targetUser: String,
+    onCancel: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Вызов...",
+            fontSize = 18.sp,
+            color = Color.White.copy(alpha = 0.7f)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = targetUser,
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+
+        Spacer(modifier = Modifier.height(64.dp))
+
+        Button(
+            onClick = onCancel,
+            modifier = Modifier.size(72.dp),
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFF44336)
+            )
+        ) {
+            Text("X", fontSize = 24.sp)
+        }
+    }
+}
+
+@Composable
+private fun ActiveCallUI(
+    callerName: String,
+    callState: CallState,
+    isMuted: Boolean,
+    isSpeakerOn: Boolean,
+    onToggleMute: () -> Unit,
+    onToggleSpeaker: () -> Unit,
+    onEndCall: () -> Unit
+) {
+    var callDuration by remember { mutableStateOf(0) }
+
+    LaunchedEffect(callState) {
+        if (callState == CallState.ACTIVE) {
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                callDuration++
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Аватар
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .background(Color(0xFF6C63FF), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = callerName.firstOrNull()?.uppercase() ?: "?",
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = callerName,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = if (callState == CallState.CONNECTING) "Соединение..."
+                   else formatDuration(callDuration),
+            fontSize = 16.sp,
+            color = Color.White.copy(alpha = 0.7f)
+        )
+
+        Spacer(modifier = Modifier.height(64.dp))
+
+        // Кнопки управления
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(32.dp)
+        ) {
+            // Mute
+            Button(
+                onClick = onToggleMute,
+                modifier = Modifier.size(64.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isMuted) Color(0xFFF44336) else Color.DarkGray
+                )
+            ) {
+                Text(if (isMuted) "M" else "m", fontSize = 20.sp)
+            }
+
+            // Speaker
+            Button(
+                onClick = onToggleSpeaker,
+                modifier = Modifier.size(64.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isSpeakerOn) Color(0xFF2196F3) else Color.DarkGray
+                )
+            ) {
+                Text("S", fontSize = 20.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        // Завершить
+        Button(
+            onClick = onEndCall,
+            modifier = Modifier.size(72.dp),
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFF44336)
+            )
+        ) {
+            Text("X", fontSize = 24.sp)
+        }
+    }
+}
+
+private fun formatDuration(seconds: Int): String {
+    val mins = seconds / 60
+    val secs = seconds % 60
+    return "${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}"
+}
+
+@Composable
+fun BubblesScreen(
+    onBack: () -> Unit
+) {
+    val cameraController = rememberCameraController()
+    var showCamera by remember { mutableStateOf(false) }
+    var recordedVideos by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedVideo by remember { mutableStateOf<String?>(null) }
+    var inlinePlayer by remember { mutableStateOf<InlineVideoPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+
+    LaunchedEffect(cameraController) {
+        cameraController.onCameraReady = {
+            cameraController.startRecording()
+        }
+
+        cameraController.onVideoRecorded = { _, _ ->
+            recordedVideos = cameraController.getRecordedVideos()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        recordedVideos = cameraController.getRecordedVideos()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp)
+        ) {
+            // Кнопка назад
+            Text(
+                text = "< Назад",
+                fontSize = 18.sp,
+                color = Color(0xFF6C63FF),
+                modifier = Modifier
+                    .clickable { onBack() }
+                    .padding(bottom = 16.dp)
+            )
+
+            // Верхняя часть - кнопка записи и камера
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Button(onClick = {
+                    if (!showCamera) {
+                        showCamera = true
+                    } else {
+                        cameraController.stopRecording()
+                        showCamera = false
+                    }
+                }) {
+                    Text(if (showCamera) "Остановить" else "Записать")
+                }
+
+                if (showCamera) {
+                    Button(
+                        onClick = { cameraController.switchCamera() },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Text("Повернуть")
+                    }
+                    CameraPreview(
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .size(300.dp)
+                            .clip(CircleShape),
+                        cameraController = cameraController,
+                        onPreviewReady = {
+                            cameraController.startCamera()
+                        }
+                    )
+                }
+            }
+
+            // Нижняя часть - грид с записанными кружками
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(top = 16.dp)
+            ) {
+                Text(
+                    text = "Записи (${recordedVideos.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                if (recordedVideos.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Нет записей")
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(recordedVideos) { videoName ->
+                            VideoCircleItem(
+                                videoName = videoName,
+                                isSelected = videoName == selectedVideo,
+                                onClick = {
+                                    if (selectedVideo == videoName) {
+                                        // Закрыть
+                                        inlinePlayer?.pause()
+                                        inlinePlayer = null
+                                        selectedVideo = null
+                                        isPlaying = false
+                                    } else {
+                                        // Новое видео
+                                        inlinePlayer?.pause()
+                                        inlinePlayer = InlineVideoPlayer(videoName)
+                                        inlinePlayer?.play()
+                                        selectedVideo = videoName
+                                        isPlaying = true
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Оверлей с видео по центру экрана
+        selectedVideo?.let { _ ->
+            inlinePlayer?.let { player ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x80000000))
+                        .clickable {
+                            inlinePlayer?.pause()
+                            inlinePlayer = null
+                            selectedVideo = null
+                            isPlaying = false
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularVideoPlayer(
+                        player = player,
+                        isPlaying = isPlaying,
+                        onTogglePlay = {
+                            if (isPlaying) {
+                                inlinePlayer?.pause()
+                                isPlaying = false
+                            } else {
+                                inlinePlayer?.play()
+                                isPlaying = true
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -282,7 +962,7 @@ fun VideoCircleItem(
                     .fillMaxWidth(0.9f)
                     .background(
                         color = Color(0xFFF5F5F5),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp)
                     )
                     .padding(8.dp)
             ) {

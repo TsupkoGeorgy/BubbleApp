@@ -1,23 +1,29 @@
 plugins {
     alias(libs.plugins.kotlinJvm)
-    alias(libs.plugins.ktor)
-    application
+    alias(libs.plugins.springBoot)
+    alias(libs.plugins.springDependencyManagement)
+    kotlin("plugin.spring") version "2.3.0"
 }
 
 group = "org.example.bubbleapp"
 version = "1.0.0"
-application {
-    mainClass.set("org.example.bubbleapp.ApplicationKt")
-    
-    val isDevelopment: Boolean = project.ext.has("development")
-    applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
 
 dependencies {
-    implementation(projects.shared)
-    implementation(libs.logback)
-    implementation(libs.ktor.serverCore)
-    implementation(libs.ktor.serverNetty)
-    testImplementation(libs.ktor.serverTestHost)
-    testImplementation(libs.kotlin.testJunit)
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.websocket)
+    implementation(libs.jackson.module.kotlin)
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+
+    testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.kotlin.test)
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }

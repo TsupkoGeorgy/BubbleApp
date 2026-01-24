@@ -18,5 +18,11 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Распознавание речи нужно для расшифровки кружков в текст</string>
 
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
 </dict>
 </plist>
