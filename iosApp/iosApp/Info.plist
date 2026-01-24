@@ -15,5 +15,8 @@
     	<key>NSMicrophoneUsageDescription</key>
     	<string>Микрофон нужен для записи кружков</string>
 
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Распознавание речи нужно для расшифровки кружков в текст</string>
+
 </dict>
 </plist>

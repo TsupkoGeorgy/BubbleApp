@@ -157,6 +157,22 @@ class IOSCameraController(
         }
     }
 
+    override fun setZoom(factor: Float) {
+        dispatch_async(sessionQueue) {
+            val device = captureVideoInput?.device ?: return@dispatch_async
+            val maxZoom = device.activeFormat.videoMaxZoomFactor.toFloat()
+            val clampedFactor = factor.coerceIn(1f, minOf(maxZoom, 5f))
+
+            try {
+                device.lockForConfiguration(null)
+                device.videoZoomFactor = clampedFactor.toDouble()
+                device.unlockForConfiguration()
+            } catch (e: Exception) {
+                println("IOSCameraController: Failed to set zoom: ${e.message}")
+            }
+        }
+    }
+
     override fun startCamera() {
         dispatch_async(sessionQueue) {
             captureSession.beginConfiguration()

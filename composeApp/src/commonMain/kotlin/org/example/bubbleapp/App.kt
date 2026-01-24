@@ -31,6 +31,24 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.atan2
 
+// Состояние транскрипции
+enum class TranscriptionState {
+    Idle,
+    Loading,
+    Success,
+    Error
+}
+
+data class TranscriptionResult(
+    val state: TranscriptionState,
+    val text: String? = null,
+    val error: String? = null
+)
+
+// expect для транскрибации
+expect fun transcribeVideo(fileName: String, onResult: (TranscriptionResult) -> Unit)
+expect fun getCachedTranscription(fileName: String): String?
+
 @Composable
 fun App() {
     MaterialTheme {
@@ -88,7 +106,7 @@ fun App() {
                         CameraPreview(
                             modifier = Modifier
                                 .padding(top = 8.dp)
-                                .size(200.dp)
+                                .size(300.dp)
                                 .clip(CircleShape),
                             cameraController = cameraController,
                             onPreviewReady = {
@@ -192,23 +210,99 @@ fun VideoCircleItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .size(100.dp)
-            .clip(CircleShape),
-        contentAlignment = Alignment.Center
+    var transcriptionState by remember { mutableStateOf(TranscriptionState.Idle) }
+    var transcriptionText by remember { mutableStateOf<String?>(null) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    // Проверяем кэш при первом рендере
+    LaunchedEffect(videoName) {
+        getCachedTranscription(videoName)?.let { cached ->
+            transcriptionText = cached
+            transcriptionState = TranscriptionState.Success
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        VideoPreviewPlayer(
-            fileName = videoName,
-            modifier = Modifier.fillMaxSize()
-        )
-        // Прозрачный слой для перехвата нажатий поверх видео
+        // Видео-кружок
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .clickable { onClick() }
-                .background(if (isSelected) Color(0x806200EE) else Color.Transparent)
-        )
+                .size(100.dp)
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            VideoPreviewPlayer(
+                fileName = videoName,
+                modifier = Modifier.fillMaxSize()
+            )
+            // Прозрачный слой для перехвата нажатий поверх видео
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable { onClick() }
+                    .background(if (isSelected) Color(0x806200EE) else Color.Transparent)
+            )
+        }
+
+        // Кнопка транскрибации (показываем если ещё нет текста)
+        if (transcriptionState == TranscriptionState.Idle) {
+            Text(
+                text = "Aa",
+                color = Color.Gray,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .clickable {
+                        transcriptionState = TranscriptionState.Loading
+                        transcribeVideo(videoName) { result ->
+                            transcriptionState = result.state
+                            transcriptionText = result.text
+                            errorText = result.error
+                        }
+                    }
+            )
+        }
+
+        // Индикатор загрузки
+        if (transcriptionState == TranscriptionState.Loading) {
+            Text(
+                text = "...",
+                color = Color.Gray,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+
+        // Текст транскрипции
+        if (transcriptionState == TranscriptionState.Success && transcriptionText != null) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth(0.9f)
+                    .background(
+                        color = Color(0xFFF5F5F5),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                    )
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = transcriptionText!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.DarkGray
+                )
+            }
+        }
+
+        // Ошибка
+        if (transcriptionState == TranscriptionState.Error && errorText != null) {
+            Text(
+                text = errorText!!,
+                color = Color.Red,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
     }
 }
 
@@ -332,6 +426,7 @@ interface CameraController {
     fun startRecording()
     fun stopRecording()
     fun switchCamera()
+    fun setZoom(factor: Float)
 
     fun playVideo(fileName: String)
     fun createInlinePlayer(fileName: String): Any
