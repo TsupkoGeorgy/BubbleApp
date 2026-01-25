@@ -19,6 +19,9 @@ actual class CallManager {
     private val _isSpeakerOn = MutableStateFlow(false)
     actual val isSpeakerOn: StateFlow<Boolean> = _isSpeakerOn
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    actual val errorMessage: StateFlow<String?> = _errorMessage
+
     actual fun connect(serverUrl: String, userId: String, userName: String) {
         // TODO: Реализовать для Android
     }
@@ -49,5 +52,13 @@ actual class CallManager {
 
     actual fun toggleSpeaker() {
         // TODO: Реализовать для Android
+    }
+
+    actual fun setLocalIP(ip: String) {
+        // TODO: Реализовать для Android
+    }
+
+    actual fun clearError() {
+        _errorMessage.value = null
     }
 }

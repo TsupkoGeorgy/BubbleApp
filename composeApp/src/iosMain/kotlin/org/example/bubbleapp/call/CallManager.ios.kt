@@ -18,7 +18,7 @@ actual class CallManager {
 
     private val signalingClient = SignalingClient(scope)
     private val callKitManager = CallKitManager()
-    private val webRTCClient = WebRTCClient(scope)
+    private val audioStreamer = AudioStreamer()
 
     private val _callState = MutableStateFlow(CallState.IDLE)
     actual val callState: StateFlow<CallState> = _callState
@@ -35,15 +35,26 @@ actual class CallManager {
     private val _isSpeakerOn = MutableStateFlow(false)
     actual val isSpeakerOn: StateFlow<Boolean> = _isSpeakerOn
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    actual val errorMessage: StateFlow<String?> = _errorMessage
+
     private var myUserId: String? = null
     private var myUserName: String? = null
     private var currentCallUUID: NSUUID? = null
     private var pendingTargetUserId: String? = null
 
+    // Порты для UDP аудио
+    private val localAudioPort = 5000 + (0..1000).random()
+    private var remoteAudioInfo: Pair<String, Int>? = null
+    private var myLocalIP: String? = null
+
+    actual fun setLocalIP(ip: String) {
+        myLocalIP = ip
+    }
+
     init {
         setupSignalingListeners()
         setupCallKitListeners()
-        setupWebRTCListeners()
     }
 
     actual fun connect(serverUrl: String, userId: String, userName: String) {
@@ -63,13 +74,9 @@ actual class CallManager {
         pendingTargetUserId = targetUserId
         _callState.value = CallState.CALLING
 
-        // Генерируем UUID для звонка
         currentCallUUID = NSUUID()
-
-        // Показываем исходящий звонок в CallKit
         callKitManager.startOutgoingCall(currentCallUUID!!, targetUserId)
 
-        // Отправляем запрос на сервер
         signalingClient.send(
             SignalMessage.CallRequest(
                 targetId = targetUserId,
@@ -94,17 +101,8 @@ actual class CallManager {
             )
         )
 
-        // Создаём answer и отправляем
-        webRTCClient.createAnswer { sdp ->
-            sdp?.let {
-                signalingClient.send(
-                    SignalMessage.Answer(
-                        targetId = callerId,
-                        sdp = it
-                    )
-                )
-            }
-        }
+        // Отправляем свою аудио информацию
+        sendAudioInfo(callerId)
     }
 
     actual fun rejectCall() {
@@ -135,19 +133,74 @@ actual class CallManager {
             )
         }
 
+        audioStreamer.stop()
         callKitManager.endCall()
-        webRTCClient.close()
         resetCallState()
     }
 
     actual fun toggleMute() {
         _isMuted.value = !_isMuted.value
-        webRTCClient.setMicrophoneEnabled(!_isMuted.value)
+        audioStreamer.setMuted(_isMuted.value)
     }
 
     actual fun toggleSpeaker() {
         _isSpeakerOn.value = !_isSpeakerOn.value
-        webRTCClient.setSpeakerEnabled(_isSpeakerOn.value)
+        audioStreamer.setSpeakerEnabled(_isSpeakerOn.value)
+    }
+
+    actual fun clearError() {
+        _errorMessage.value = null
+    }
+
+    private fun sendAudioInfo(targetId: String) {
+        // Получаем локальный IP
+        val localIP = getLocalIPAddress() ?: "0.0.0.0"
+        println("Sending audio info: IP=$localIP, port=$localAudioPort")
+
+        signalingClient.send(
+            SignalMessage.AudioInfo(
+                targetId = targetId,
+                ip = localIP,
+                port = localAudioPort
+            )
+        )
+    }
+
+    private fun getLocalIPAddress(): String {
+        // IP устанавливается через myLocalIP или берётся из настроек
+        return myLocalIP ?: "0.0.0.0"
+    }
+
+    private fun startAudioStream() {
+        val remote = remoteAudioInfo ?: return
+        println("Starting audio stream to ${remote.first}:${remote.second}")
+
+        audioStreamer.onError = { error ->
+            println("Audio error: $error")
+            scope.launch {
+                _errorMessage.value = error
+                _callState.value = CallState.FAILED
+                audioStreamer.stop()
+                callKitManager.endCall()
+            }
+        }
+
+        try {
+            audioStreamer.start(
+                remoteHost = remote.first,
+                remotePort = remote.second,
+                localPort = localAudioPort
+            )
+
+            _callState.value = CallState.ACTIVE
+            currentCallUUID?.let {
+                callKitManager.reportOutgoingCallConnected(it)
+            }
+        } catch (e: Exception) {
+            println("Failed to start audio stream: ${e.message}")
+            _errorMessage.value = "Ошибка аудио: ${e.message}"
+            _callState.value = CallState.FAILED
+        }
     }
 
     private fun setupSignalingListeners() {
@@ -155,12 +208,10 @@ actual class CallManager {
             when (message) {
                 is SignalMessage.CallRequest -> handleIncomingCall(message)
                 is SignalMessage.CallResponse -> handleCallResponse(message)
-                is SignalMessage.Offer -> handleOffer(message)
-                is SignalMessage.Answer -> handleAnswer(message)
-                is SignalMessage.IceCandidate -> handleIceCandidate(message)
+                is SignalMessage.AudioInfo -> handleAudioInfo(message)
                 is SignalMessage.CallEnd -> handleCallEnd(message)
                 is SignalMessage.Error -> handleError(message)
-                is SignalMessage.Register -> {} // игнорируем
+                else -> {}
             }
         }.launchIn(scope)
     }
@@ -182,53 +233,16 @@ actual class CallManager {
 
         callKitManager.onMuteCall = { uuid, muted ->
             _isMuted.value = muted
-            webRTCClient.setMicrophoneEnabled(!muted)
+            audioStreamer.setMuted(muted)
         }
 
         callKitManager.onStartCall = { uuid ->
-            // Звонок начался через CallKit UI
             callKitManager.reportOutgoingCallStartedConnecting(uuid)
         }
     }
 
-    private fun setupWebRTCListeners() {
-        webRTCClient.localIceCandidates.onEach { candidate ->
-            val targetId = _currentCallerId.value ?: pendingTargetUserId ?: return@onEach
-
-            signalingClient.send(
-                SignalMessage.IceCandidate(
-                    targetId = targetId,
-                    candidate = candidate.candidate,
-                    sdpMid = candidate.sdpMid,
-                    sdpMLineIndex = candidate.sdpMLineIndex
-                )
-            )
-        }.launchIn(scope)
-
-        webRTCClient.connectionStateChanged.onEach { state ->
-            when (state) {
-                WebRTCConnectionState.CONNECTED -> {
-                    _callState.value = CallState.ACTIVE
-                    currentCallUUID?.let {
-                        callKitManager.reportOutgoingCallConnected(it)
-                    }
-                }
-                WebRTCConnectionState.DISCONNECTED,
-                WebRTCConnectionState.FAILED -> {
-                    if (_callState.value == CallState.ACTIVE) {
-                        _callState.value = CallState.ENDED
-                        callKitManager.endCall()
-                        resetCallState()
-                    }
-                }
-                else -> {}
-            }
-        }.launchIn(scope)
-    }
-
     private fun handleIncomingCall(message: SignalMessage.CallRequest) {
         if (_callState.value != CallState.IDLE) {
-            // Уже в звонке - отклоняем
             signalingClient.send(
                 SignalMessage.CallResponse(
                     targetId = message.callerId,
@@ -243,8 +257,6 @@ actual class CallManager {
         _callState.value = CallState.RINGING
 
         currentCallUUID = NSUUID()
-
-        // Показываем входящий звонок через CallKit
         callKitManager.reportIncomingCall(currentCallUUID!!, message.callerName)
     }
 
@@ -256,61 +268,27 @@ actual class CallManager {
             return
         }
 
-        // Звонок принят - создаём offer
         _callState.value = CallState.CONNECTING
-
-        webRTCClient.createOffer { sdp ->
-            sdp?.let {
-                val targetId = pendingTargetUserId ?: return@let
-                signalingClient.send(
-                    SignalMessage.Offer(
-                        targetId = targetId,
-                        sdp = it
-                    )
-                )
-            }
-        }
-    }
-
-    private fun handleOffer(message: SignalMessage.Offer) {
         _currentCallerId.value = message.targetId
 
-        webRTCClient.setRemoteDescription(message.sdp, SdpType.OFFER) { success ->
-            if (success) {
-                webRTCClient.createAnswer { sdp ->
-                    sdp?.let {
-                        signalingClient.send(
-                            SignalMessage.Answer(
-                                targetId = message.targetId,
-                                sdp = it
-                            )
-                        )
-                    }
-                }
-            }
-        }
+        // Отправляем свою аудио информацию
+        sendAudioInfo(message.targetId)
     }
 
-    private fun handleAnswer(message: SignalMessage.Answer) {
-        webRTCClient.setRemoteDescription(message.sdp, SdpType.ANSWER) { success ->
-            if (success) {
-                _callState.value = CallState.ACTIVE
-            }
-        }
-    }
+    private fun handleAudioInfo(message: SignalMessage.AudioInfo) {
+        println("Received audio info: IP=${message.ip}, port=${message.port}")
+        remoteAudioInfo = Pair(message.ip, message.port)
 
-    private fun handleIceCandidate(message: SignalMessage.IceCandidate) {
-        webRTCClient.addIceCandidate(
-            message.candidate,
-            message.sdpMid,
-            message.sdpMLineIndex
-        )
+        // Если мы уже в состоянии CONNECTING, начинаем стрим
+        if (_callState.value == CallState.CONNECTING) {
+            startAudioStream()
+        }
     }
 
     private fun handleCallEnd(message: SignalMessage.CallEnd) {
         _callState.value = CallState.ENDED
         callKitManager.reportCallEnded(reason = CXCallEndedReasonRemoteEnded)
-        webRTCClient.close()
+        audioStreamer.stop()
         resetCallState()
     }
 
@@ -331,5 +309,6 @@ actual class CallManager {
         _isSpeakerOn.value = false
         currentCallUUID = null
         pendingTargetUserId = null
+        remoteAudioInfo = null
     }
 }

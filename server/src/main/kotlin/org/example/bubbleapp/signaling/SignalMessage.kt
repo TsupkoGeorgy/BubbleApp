@@ -16,7 +16,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
     JsonSubTypes.Type(value = SignalMessage.CallResponse::class, name = "call_response"),
     JsonSubTypes.Type(value = SignalMessage.CallEnd::class, name = "call_end"),
     JsonSubTypes.Type(value = SignalMessage.Register::class, name = "register"),
-    JsonSubTypes.Type(value = SignalMessage.Error::class, name = "error")
+    JsonSubTypes.Type(value = SignalMessage.Error::class, name = "error"),
+    JsonSubTypes.Type(value = SignalMessage.AudioInfo::class, name = "audio_info")
 )
 sealed class SignalMessage {
     abstract val targetId: String?
@@ -62,5 +63,11 @@ sealed class SignalMessage {
     data class Error(
         val message: String,
         override val targetId: String? = null
+    ) : SignalMessage()
+
+    data class AudioInfo(
+        override val targetId: String,
+        val ip: String,
+        val port: Int
     ) : SignalMessage()
 }

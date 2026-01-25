@@ -8,6 +8,7 @@ expect class CallManager() {
     val currentCallerName: StateFlow<String?>
     val isMuted: StateFlow<Boolean>
     val isSpeakerOn: StateFlow<Boolean>
+    val errorMessage: StateFlow<String?>
 
     fun connect(serverUrl: String, userId: String, userName: String)
     fun disconnect()
@@ -19,4 +20,7 @@ expect class CallManager() {
 
     fun toggleMute()
     fun toggleSpeaker()
+
+    fun setLocalIP(ip: String)
+    fun clearError()
 }

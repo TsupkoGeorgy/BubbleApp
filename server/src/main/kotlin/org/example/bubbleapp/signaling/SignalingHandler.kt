@@ -48,6 +48,7 @@ class SignalingHandler(
                 is SignalMessage.CallRequest -> forwardToTarget(session, signal)
                 is SignalMessage.CallResponse -> forwardToTarget(session, signal)
                 is SignalMessage.CallEnd -> forwardToTarget(session, signal)
+                is SignalMessage.AudioInfo -> forwardToTarget(session, signal)
                 is SignalMessage.Error -> {} // клиент не должен слать ошибки
             }
         } catch (e: Exception) {
@@ -94,6 +95,7 @@ class SignalingHandler(
             is SignalMessage.IceCandidate -> signal.copy(targetId = senderId)
             is SignalMessage.CallResponse -> signal.copy(targetId = senderId)
             is SignalMessage.CallEnd -> signal.copy(targetId = senderId)
+            is SignalMessage.AudioInfo -> signal.copy(targetId = senderId)
             else -> signal
         }
 
@@ -120,5 +122,14 @@ class SignalingHandler(
 
     fun getOnlineUsers(): Set<String> {
         return sessions.filter { it.value.isOpen }.keys
+    }
+
+    fun getOnlineUsersWithInfo(): List<Map<String, String?>> {
+        return sessions.filter { it.value.isOpen }.map { (userId, session) ->
+            mapOf(
+                "userId" to userId,
+                "ip" to session.remoteAddress?.address?.hostAddress
+            )
+        }
     }
 }

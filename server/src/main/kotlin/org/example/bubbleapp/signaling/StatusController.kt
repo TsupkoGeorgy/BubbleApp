@@ -18,10 +18,13 @@ class StatusController(
     )
 
     @GetMapping("/users/online")
-    fun onlineUsers(): Map<String, Any> = mapOf(
-        "count" to signalingHandler.getOnlineUsers().size,
-        "users" to signalingHandler.getOnlineUsers()
-    )
+    fun onlineUsers(): Map<String, Any> {
+        val usersWithInfo = signalingHandler.getOnlineUsersWithInfo()
+        return mapOf(
+            "count" to usersWithInfo.size,
+            "users" to usersWithInfo
+        )
+    }
 
     @GetMapping("/users/{userId}/online")
     fun isUserOnline(@PathVariable userId: String): Map<String, Boolean> = mapOf(

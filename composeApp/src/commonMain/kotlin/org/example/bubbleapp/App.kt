@@ -241,10 +241,12 @@ fun CallsScreen(
     val currentCallerName by callManager.currentCallerName.collectAsState()
     val isMuted by callManager.isMuted.collectAsState()
     val isSpeakerOn by callManager.isSpeakerOn.collectAsState()
+    val errorMessage by callManager.errorMessage.collectAsState()
 
     var serverUrl by remember { mutableStateOf("ws://192.168.0.199:8080/call") }
     var userId by remember { mutableStateOf("") }
     var userName by remember { mutableStateOf("") }
+    var myIP by remember { mutableStateOf("") }
     var targetUserId by remember { mutableStateOf("") }
     var isConnected by remember { mutableStateOf(false) }
 
@@ -319,17 +321,28 @@ fun CallsScreen(
                     )
                 }
 
+                // Ошибка звонка
+                callState == CallState.FAILED -> {
+                    ErrorUI(
+                        errorMessage = errorMessage ?: "Неизвестная ошибка",
+                        onDismiss = { callManager.clearError() }
+                    )
+                }
+
                 // Не подключен к серверу
                 !isConnected -> {
                     ConnectionUI(
                         serverUrl = serverUrl,
                         userId = userId,
                         userName = userName,
+                        myIP = myIP,
                         onServerUrlChange = { serverUrl = it },
                         onUserIdChange = { userId = it },
                         onUserNameChange = { userName = it },
+                        onMyIPChange = { myIP = it },
                         onConnect = {
-                            if (userId.isNotBlank() && userName.isNotBlank()) {
+                            if (userId.isNotBlank() && userName.isNotBlank() && myIP.isNotBlank()) {
+                                callManager.setLocalIP(myIP)
                                 callManager.connect(serverUrl, userId, userName)
                                 isConnected = true
                             }
@@ -364,9 +377,11 @@ private fun ConnectionUI(
     serverUrl: String,
     userId: String,
     userName: String,
+    myIP: String,
     onServerUrlChange: (String) -> Unit,
     onUserIdChange: (String) -> Unit,
     onUserNameChange: (String) -> Unit,
+    onMyIPChange: (String) -> Unit,
     onConnect: () -> Unit
 ) {
     Column(
@@ -418,6 +433,24 @@ private fun ConnectionUI(
             value = userName,
             onValueChange = onUserNameChange,
             label = { Text("Ваше имя") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFF00C9A7),
+                unfocusedBorderColor = Color.Gray,
+                focusedLabelColor = Color(0xFF00C9A7),
+                unfocusedLabelColor = Color.Gray,
+                cursorColor = Color.White
+            )
+        )
+
+        OutlinedTextField(
+            value = myIP,
+            onValueChange = onMyIPChange,
+            label = { Text("Мой IP (WiFi)") },
+            placeholder = { Text("192.168.0.xxx", color = Color.Gray.copy(alpha = 0.5f)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
@@ -603,6 +636,63 @@ private fun OutgoingCallUI(
             )
         ) {
             Text("X", fontSize = 24.sp)
+        }
+    }
+}
+
+@Composable
+private fun ErrorUI(
+    errorMessage: String,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Иконка ошибки
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .background(Color(0xFFF44336), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "!",
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Ошибка",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = errorMessage,
+            fontSize = 16.sp,
+            color = Color.White.copy(alpha = 0.8f),
+            modifier = Modifier.padding(horizontal = 32.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        Button(
+            onClick = onDismiss,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF6C63FF)
+            )
+        ) {
+            Text("OK", fontSize = 18.sp)
         }
     }
 }

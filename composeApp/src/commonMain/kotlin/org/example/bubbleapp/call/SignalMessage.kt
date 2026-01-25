@@ -65,6 +65,14 @@ sealed class SignalMessage {
         val message: String,
         override val targetId: String? = null
     ) : SignalMessage()
+
+    @Serializable
+    @SerialName("audio_info")
+    data class AudioInfo(
+        override val targetId: String,
+        val ip: String,
+        val port: Int
+    ) : SignalMessage()
 }
 
 enum class CallState {
