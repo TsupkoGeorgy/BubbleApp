@@ -10,6 +10,7 @@ import org.example.bubbleapp.message.entity.MessageType
 import org.example.bubbleapp.message.repository.MessageRepository
 import org.example.bubbleapp.user.entity.User
 import org.example.bubbleapp.user.repository.UserRepository
+import org.example.bubbleapp.websocket.chat.ChatWebSocketHandler
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
@@ -21,7 +22,8 @@ class MessageService(
     private val messageRepository: MessageRepository,
     private val chatRepository: ChatRepository,
     private val chatMemberRepository: ChatMemberRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val chatWebSocketHandler: ChatWebSocketHandler
 ) {
     private val log = LoggerFactory.getLogger(MessageService::class.java)
 
@@ -62,7 +64,12 @@ class MessageService(
 
         log.info("Message ${savedMessage.id} sent in chat $chatId by user $senderId")
 
-        return savedMessage.toResponse()
+        val response = savedMessage.toResponse()
+
+        // Broadcast to WebSocket subscribers
+        chatWebSocketHandler.broadcastNewMessage(chatId, response)
+
+        return response
     }
 
     fun getMessages(
@@ -112,6 +119,14 @@ class MessageService(
 
         log.info("Message $messageId edited by user $userId")
 
+        // Broadcast edit to WebSocket subscribers
+        chatWebSocketHandler.broadcastMessageEdited(
+            chatId = message.chat.id,
+            messageId = messageId,
+            content = request.content,
+            updatedAt = savedMessage.updatedAt
+        )
+
         return savedMessage.toResponse()
     }
 
@@ -125,8 +140,12 @@ class MessageService(
             throw MessageAccessDeniedException("Only the sender can delete this message")
         }
 
+        val chatId = message.chat.id
         messageRepository.delete(message)
         log.info("Message $messageId deleted by user $userId")
+
+        // Broadcast deletion to WebSocket subscribers
+        chatWebSocketHandler.broadcastMessageDeleted(chatId, messageId)
     }
 
     private fun findChatOrThrow(chatId: UUID): Chat {

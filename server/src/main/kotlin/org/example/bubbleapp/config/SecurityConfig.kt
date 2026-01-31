@@ -26,7 +26,8 @@ class SecurityConfig(
                     // Public endpoints
                     .requestMatchers("/").permitAll()
                     .requestMatchers("/auth/**").permitAll()
-                    .requestMatchers("/call").permitAll()  // WebSocket endpoint
+                    .requestMatchers("/call").permitAll()  // WebSocket signaling
+                    .requestMatchers("/ws/chat").permitAll()  // WebSocket chat
                     .requestMatchers("/status").permitAll()
                     // H2 Console (dev only)
                     .requestMatchers("/h2-console/**").permitAll()
