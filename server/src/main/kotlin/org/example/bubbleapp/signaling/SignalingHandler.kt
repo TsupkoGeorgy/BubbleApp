@@ -49,6 +49,8 @@ class SignalingHandler(
                 is SignalMessage.CallResponse -> forwardToTarget(session, signal)
                 is SignalMessage.CallEnd -> forwardToTarget(session, signal)
                 is SignalMessage.AudioInfo -> forwardToTarget(session, signal)
+                is SignalMessage.EncryptionKey -> forwardToTarget(session, signal)
+                is SignalMessage.AudioData -> forwardToTarget(session, signal, logAudio = false)
                 is SignalMessage.Error -> {} // клиент не должен слать ошибки
             }
         } catch (e: Exception) {
@@ -73,7 +75,7 @@ class SignalingHandler(
         logger.info("User registered: $userId")
     }
 
-    private fun forwardToTarget(session: WebSocketSession, signal: SignalMessage) {
+    private fun forwardToTarget(session: WebSocketSession, signal: SignalMessage, logAudio: Boolean = true) {
         val targetId = signal.targetId ?: return
         val senderId = sessionToUser[session.id]
 
@@ -84,7 +86,10 @@ class SignalingHandler(
 
         val targetSession = sessions[targetId]
         if (targetSession == null || !targetSession.isOpen) {
-            sendError(session, "Target user not found or offline")
+            // Don't send error for audio data - just drop silently
+            if (signal !is SignalMessage.AudioData) {
+                sendError(session, "Target user not found or offline")
+            }
             return
         }
 
@@ -96,11 +101,17 @@ class SignalingHandler(
             is SignalMessage.CallResponse -> signal.copy(targetId = senderId)
             is SignalMessage.CallEnd -> signal.copy(targetId = senderId)
             is SignalMessage.AudioInfo -> signal.copy(targetId = senderId)
+            is SignalMessage.EncryptionKey -> signal.copy(targetId = senderId)
+            is SignalMessage.AudioData -> signal.copy(targetId = senderId)
             else -> signal
         }
 
         sendMessage(targetSession, messageToSend)
-        logger.debug("Forwarded ${signal::class.simpleName} from $senderId to $targetId")
+
+        // Don't log audio data to avoid flooding logs
+        if (logAudio) {
+            logger.debug("Forwarded ${signal::class.simpleName} from $senderId to $targetId")
+        }
     }
 
     private fun sendMessage(session: WebSocketSession, message: SignalMessage) {

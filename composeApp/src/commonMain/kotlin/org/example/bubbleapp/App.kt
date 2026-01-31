@@ -242,13 +242,14 @@ fun CallsScreen(
     val isMuted by callManager.isMuted.collectAsState()
     val isSpeakerOn by callManager.isSpeakerOn.collectAsState()
     val errorMessage by callManager.errorMessage.collectAsState()
+    val isConnected by callManager.isConnected.collectAsState()
+    val connectionError by callManager.connectionError.collectAsState()
 
-    var serverUrl by remember { mutableStateOf("ws://192.168.0.199:8080/call") }
+    var serverUrl by remember { mutableStateOf("wss://untribally-adverbless-rohan.ngrok-free.dev/call") }
     var userId by remember { mutableStateOf("") }
     var userName by remember { mutableStateOf("") }
     var myIP by remember { mutableStateOf("") }
     var targetUserId by remember { mutableStateOf("") }
-    var isConnected by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -331,23 +332,38 @@ fun CallsScreen(
 
                 // Не подключен к серверу
                 !isConnected -> {
-                    ConnectionUI(
-                        serverUrl = serverUrl,
-                        userId = userId,
-                        userName = userName,
-                        myIP = myIP,
-                        onServerUrlChange = { serverUrl = it },
-                        onUserIdChange = { userId = it },
-                        onUserNameChange = { userName = it },
-                        onMyIPChange = { myIP = it },
-                        onConnect = {
-                            if (userId.isNotBlank() && userName.isNotBlank() && myIP.isNotBlank()) {
-                                callManager.setLocalIP(myIP)
-                                callManager.connect(serverUrl, userId, userName)
-                                isConnected = true
-                            }
+                    Column {
+                        // Show connection error if any
+                        connectionError?.let { error ->
+                            Text(
+                                text = error,
+                                color = Color.Red,
+                                fontSize = 14.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0x33FF0000))
+                                    .padding(12.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
-                    )
+
+                        ConnectionUI(
+                            serverUrl = serverUrl,
+                            userId = userId,
+                            userName = userName,
+                            myIP = myIP,
+                            onServerUrlChange = { serverUrl = it },
+                            onUserIdChange = { userId = it },
+                            onUserNameChange = { userName = it },
+                            onMyIPChange = { myIP = it },
+                            onConnect = {
+                                if (userId.isNotBlank() && userName.isNotBlank()) {
+                                    callManager.setLocalIP(myIP)
+                                    callManager.connect(serverUrl, userId, userName)
+                                }
+                            }
+                        )
+                    }
                 }
 
                 // Подключен, можно звонить
@@ -363,7 +379,6 @@ fun CallsScreen(
                         },
                         onDisconnect = {
                             callManager.disconnect()
-                            isConnected = false
                         }
                     )
                 }

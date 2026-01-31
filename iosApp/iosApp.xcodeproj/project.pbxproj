@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E820FB202F26C98E008BE10F /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = E820FB1F2F26C98E008BE10F /* WebRTC */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		F6A906D4A4029E9EFAD13E40 /* BubbleApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BubbleApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -41,6 +45,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E820FB202F26C98E008BE10F /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -52,6 +57,7 @@
 			children = (
 				F0B438B34925CD960D254C44 /* Configuration */,
 				4D393FAFC0331FEADECD3D80 /* iosApp */,
+				E820FB212F26CA0B008BE10F /* Frameworks */,
 				AF3D9398975D6E9F227CBD3D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -62,6 +68,13 @@
 				F6A906D4A4029E9EFAD13E40 /* BubbleApp.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E820FB212F26CA0B008BE10F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -85,6 +98,7 @@
 			);
 			name = iosApp;
 			packageProductDependencies = (
+				E820FB1F2F26C98E008BE10F /* WebRTC */,
 			);
 			productName = iosApp;
 			productReference = F6A906D4A4029E9EFAD13E40 /* BubbleApp.app */;
@@ -98,7 +112,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					48588B59EB7BD06C82E50F2F = {
 						CreatedOnToolsVersion = 16.2;
@@ -114,6 +128,9 @@
 			);
 			mainGroup = 7C93385552A7E455B7A12E49;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E820FB1E2F26C98E008BE10F /* XCRemoteSwiftPackageReference "WebRTC" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AF3D9398975D6E9F227CBD3D /* Products */;
 			projectDirPath = "";
@@ -220,6 +237,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -228,7 +246,6 @@
 		5F80B13B37ED0F5C073164F1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -256,7 +273,6 @@
 		6938020512FF1403127CFBBB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -341,6 +357,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -368,6 +385,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E820FB1E2F26C98E008BE10F /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 141.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E820FB1F2F26C98E008BE10F /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E820FB1E2F26C98E008BE10F /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7CD5729E7F3847639A4FEB71 /* Project object */;
 }

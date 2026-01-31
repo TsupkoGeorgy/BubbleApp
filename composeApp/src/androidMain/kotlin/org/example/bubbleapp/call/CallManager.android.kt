@@ -22,6 +22,12 @@ actual class CallManager {
     private val _errorMessage = MutableStateFlow<String?>(null)
     actual val errorMessage: StateFlow<String?> = _errorMessage
 
+    private val _isConnected = MutableStateFlow(false)
+    actual val isConnected: StateFlow<Boolean> = _isConnected
+
+    private val _connectionError = MutableStateFlow<String?>(null)
+    actual val connectionError: StateFlow<String?> = _connectionError
+
     actual fun connect(serverUrl: String, userId: String, userName: String) {
         // TODO: Реализовать для Android
     }

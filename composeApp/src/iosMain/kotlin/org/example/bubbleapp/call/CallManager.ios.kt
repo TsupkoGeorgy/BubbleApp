@@ -18,7 +18,7 @@ actual class CallManager {
 
     private val signalingClient = SignalingClient(scope)
     private val callKitManager = CallKitManager()
-    private val audioStreamer = AudioStreamer()
+    private val audioStreamer = AudioRelayStreamer(scope)
 
     private val _callState = MutableStateFlow(CallState.IDLE)
     actual val callState: StateFlow<CallState> = _callState
@@ -38,23 +38,71 @@ actual class CallManager {
     private val _errorMessage = MutableStateFlow<String?>(null)
     actual val errorMessage: StateFlow<String?> = _errorMessage
 
+    private val _isConnected = MutableStateFlow(false)
+    actual val isConnected: StateFlow<Boolean> = _isConnected
+
+    actual val connectionError: StateFlow<String?> = signalingClient.connectionError
+
     private var myUserId: String? = null
     private var myUserName: String? = null
     private var currentCallUUID: NSUUID? = null
     private var pendingTargetUserId: String? = null
 
-    // Порты для UDP аудио
-    private val localAudioPort = 5000 + (0..1000).random()
-    private var remoteAudioInfo: Pair<String, Int>? = null
-    private var myLocalIP: String? = null
-
     actual fun setLocalIP(ip: String) {
-        myLocalIP = ip
+        // Not needed for relay - server handles routing
     }
 
     init {
         setupSignalingListeners()
         setupCallKitListeners()
+        setupAudioStreamerCallbacks()
+        setupConnectionStateListener()
+    }
+
+    private fun setupConnectionStateListener() {
+        signalingClient.connectionState.onEach { state ->
+            _isConnected.value = (state == ConnectionState.CONNECTED)
+
+            // Если соединение потеряно во время звонка - завершить звонок
+            if (state == ConnectionState.FAILED || state == ConnectionState.DISCONNECTED) {
+                if (_callState.value == CallState.ACTIVE || _callState.value == CallState.CONNECTING) {
+                    println("Connection lost during call, ending call")
+                    audioStreamer.stop()
+                    callKitManager.endCall()
+                    _callState.value = CallState.FAILED
+                    _errorMessage.value = "Connection lost"
+                    resetCallState()
+                }
+            }
+        }.launchIn(scope)
+    }
+
+    private fun setupAudioStreamerCallbacks() {
+        audioStreamer.onError = { error ->
+            scope.launch {
+                _errorMessage.value = error
+                _callState.value = CallState.FAILED
+            }
+        }
+
+        audioStreamer.onAudioData = { encryptedData ->
+            // Send encrypted audio to peer via signaling only if connected
+            if (_isConnected.value && _callState.value == CallState.ACTIVE) {
+                val targetId = _currentCallerId.value ?: pendingTargetUserId
+                if (targetId != null) {
+                    signalingClient.send(SignalMessage.AudioData(targetId, encryptedData))
+                }
+            }
+        }
+
+        audioStreamer.onReady = {
+            // Both keys are ready - start audio streaming
+            scope.launch {
+                if (_callState.value == CallState.CONNECTING) {
+                    startAudioStreaming()
+                }
+            }
+        }
     }
 
     actual fun connect(serverUrl: String, userId: String, userName: String) {
@@ -93,16 +141,22 @@ actual class CallManager {
 
         _callState.value = CallState.CONNECTING
 
-        // Отправляем accept
+        // Generate encryption key and send to peer
+        val encryptionKey = audioStreamer.generateEncryptionKey()
+        signalingClient.send(
+            SignalMessage.EncryptionKey(
+                targetId = callerId,
+                key = encryptionKey
+            )
+        )
+
+        // Send accept response
         signalingClient.send(
             SignalMessage.CallResponse(
                 targetId = callerId,
                 accepted = true
             )
         )
-
-        // Отправляем свою аудио информацию
-        sendAudioInfo(callerId)
     }
 
     actual fun rejectCall() {
@@ -152,63 +206,13 @@ actual class CallManager {
         _errorMessage.value = null
     }
 
-    private fun sendAudioInfo(targetId: String) {
-        // Получаем локальный IP
-        val localIP = getLocalIPAddress() ?: "0.0.0.0"
-        println("Sending audio info: IP=$localIP, port=$localAudioPort")
-
-        signalingClient.send(
-            SignalMessage.AudioInfo(
-                targetId = targetId,
-                ip = localIP,
-                port = localAudioPort
-            )
-        )
-    }
-
-    private fun getLocalIPAddress(): String {
-        // IP устанавливается через myLocalIP или берётся из настроек
-        return myLocalIP ?: "0.0.0.0"
-    }
-
-    private fun startAudioStream() {
-        val remote = remoteAudioInfo ?: return
-        println("Starting audio stream to ${remote.first}:${remote.second}")
-
-        audioStreamer.onError = { error ->
-            println("Audio error: $error")
-            scope.launch {
-                _errorMessage.value = error
-                _callState.value = CallState.FAILED
-                audioStreamer.stop()
-                callKitManager.endCall()
-            }
-        }
-
-        try {
-            audioStreamer.start(
-                remoteHost = remote.first,
-                remotePort = remote.second,
-                localPort = localAudioPort
-            )
-
-            _callState.value = CallState.ACTIVE
-            currentCallUUID?.let {
-                callKitManager.reportOutgoingCallConnected(it)
-            }
-        } catch (e: Exception) {
-            println("Failed to start audio stream: ${e.message}")
-            _errorMessage.value = "Ошибка аудио: ${e.message}"
-            _callState.value = CallState.FAILED
-        }
-    }
-
     private fun setupSignalingListeners() {
         signalingClient.messages.onEach { message ->
             when (message) {
                 is SignalMessage.CallRequest -> handleIncomingCall(message)
                 is SignalMessage.CallResponse -> handleCallResponse(message)
-                is SignalMessage.AudioInfo -> handleAudioInfo(message)
+                is SignalMessage.EncryptionKey -> handleEncryptionKey(message)
+                is SignalMessage.AudioData -> handleAudioData(message)
                 is SignalMessage.CallEnd -> handleCallEnd(message)
                 is SignalMessage.Error -> handleError(message)
                 else -> {}
@@ -271,17 +275,34 @@ actual class CallManager {
         _callState.value = CallState.CONNECTING
         _currentCallerId.value = message.targetId
 
-        // Отправляем свою аудио информацию
-        sendAudioInfo(message.targetId)
+        // Generate encryption key and send to peer
+        val encryptionKey = audioStreamer.generateEncryptionKey()
+        signalingClient.send(
+            SignalMessage.EncryptionKey(
+                targetId = message.targetId,
+                key = encryptionKey
+            )
+        )
     }
 
-    private fun handleAudioInfo(message: SignalMessage.AudioInfo) {
-        println("Received audio info: IP=${message.ip}, port=${message.port}")
-        remoteAudioInfo = Pair(message.ip, message.port)
+    private fun handleEncryptionKey(message: SignalMessage.EncryptionKey) {
+        println("Received encryption key from ${message.targetId}")
+        audioStreamer.setRemoteEncryptionKey(message.key)
+        // Audio will start via onReady callback when both keys are set
+    }
 
-        // Если мы уже в состоянии CONNECTING, начинаем стрим
-        if (_callState.value == CallState.CONNECTING) {
-            startAudioStream()
+    private fun handleAudioData(message: SignalMessage.AudioData) {
+        // Decrypt and play received audio
+        audioStreamer.receiveEncryptedAudio(message.data)
+    }
+
+    private fun startAudioStreaming() {
+        println("Starting audio streaming with E2E encryption")
+        audioStreamer.start()
+
+        _callState.value = CallState.ACTIVE
+        currentCallUUID?.let {
+            callKitManager.reportOutgoingCallConnected(it)
         }
     }
 
@@ -309,6 +330,5 @@ actual class CallManager {
         _isSpeakerOn.value = false
         currentCallUUID = null
         pendingTargetUserId = null
-        remoteAudioInfo = null
     }
 }

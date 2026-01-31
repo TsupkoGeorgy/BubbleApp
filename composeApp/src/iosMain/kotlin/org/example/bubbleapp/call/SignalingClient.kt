@@ -37,6 +37,9 @@ class SignalingClient(
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
 
+    private val _connectionError = MutableStateFlow<String?>(null)
+    val connectionError: StateFlow<String?> = _connectionError
+
     private val _messages = MutableSharedFlow<SignalMessage>()
     val messages: SharedFlow<SignalMessage> = _messages
 
@@ -48,7 +51,10 @@ class SignalingClient(
         this.pendingRegistration = true
         _connectionState.value = ConnectionState.CONNECTING
 
+        _connectionError.value = null
+
         val url = NSURL.URLWithString(serverUrl) ?: run {
+            _connectionError.value = "Invalid server URL"
             _connectionState.value = ConnectionState.FAILED
             return
         }
@@ -68,6 +74,9 @@ class SignalingClient(
 
     private fun onWebSocketOpened() {
         println("WebSocket opened, sending registration for userId: $userId")
+        // Устанавливаем CONNECTED сразу при открытии WebSocket
+        _connectionState.value = ConnectionState.CONNECTED
+
         if (pendingRegistration && userId != null) {
             pendingRegistration = false
             val registerMessage = SignalMessage.Register(userId!!)
@@ -78,9 +87,9 @@ class SignalingClient(
             webSocketTask?.sendMessage(wsMessage) { error ->
                 if (error != null) {
                     println("WebSocket send error: ${error.localizedDescription}")
+                    _connectionState.value = ConnectionState.FAILED
                 } else {
                     println("Register message sent successfully")
-                    _connectionState.value = ConnectionState.CONNECTED
                 }
             }
         }
@@ -111,6 +120,7 @@ class SignalingClient(
         webSocketTask?.receiveMessageWithCompletionHandler { message, error ->
             if (error != null) {
                 println("WebSocket receive error: ${error.localizedDescription}")
+                _connectionError.value = "Connection error: ${error.localizedDescription}"
                 _connectionState.value = ConnectionState.FAILED
                 return@receiveMessageWithCompletionHandler
             }
@@ -128,14 +138,15 @@ class SignalingClient(
                 }
             }
 
-            // Продолжаем слушать
-            if (_connectionState.value == ConnectionState.CONNECTED) {
+            // Продолжаем слушать пока соединение активно
+            val state = _connectionState.value
+            if (state == ConnectionState.CONNECTED || state == ConnectionState.CONNECTING) {
                 receiveMessage()
             }
         }
     }
 
-    private inner class WebSocketDelegate : NSObject(), NSURLSessionWebSocketDelegateProtocol {
+    private inner class WebSocketDelegate : NSObject(), NSURLSessionWebSocketDelegateProtocol, NSURLSessionTaskDelegateProtocol {
         override fun URLSession(
             session: NSURLSession,
             webSocketTask: NSURLSessionWebSocketTask,
@@ -153,6 +164,18 @@ class SignalingClient(
         ) {
             println("WebSocket closed with code: $didCloseWithCode")
             _connectionState.value = ConnectionState.DISCONNECTED
+        }
+
+        override fun URLSession(
+            session: NSURLSession,
+            task: NSURLSessionTask,
+            didCompleteWithError: NSError?
+        ) {
+            if (didCompleteWithError != null) {
+                println("WebSocket connection failed: ${didCompleteWithError.localizedDescription}")
+                _connectionError.value = "Failed to connect: ${didCompleteWithError.localizedDescription}"
+                _connectionState.value = ConnectionState.FAILED
+            }
         }
     }
 

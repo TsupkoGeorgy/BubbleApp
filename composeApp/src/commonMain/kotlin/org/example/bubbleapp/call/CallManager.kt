@@ -9,6 +9,8 @@ expect class CallManager() {
     val isMuted: StateFlow<Boolean>
     val isSpeakerOn: StateFlow<Boolean>
     val errorMessage: StateFlow<String?>
+    val isConnected: StateFlow<Boolean>
+    val connectionError: StateFlow<String?>
 
     fun connect(serverUrl: String, userId: String, userName: String)
     fun disconnect()

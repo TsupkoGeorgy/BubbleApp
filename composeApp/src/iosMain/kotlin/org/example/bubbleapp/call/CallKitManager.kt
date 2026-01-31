@@ -37,6 +37,7 @@ class CallKitManager : NSObject(), CXProviderDelegateProtocol {
         completion: ((NSError?) -> Unit)? = null
     ) {
         activeCallUUID = uuid
+        println("CallKit: Reporting incoming call from $callerName")
 
         val update = CXCallUpdate().apply {
             remoteHandle = CXHandle(CXHandleTypeGeneric, callerName)
@@ -46,16 +47,19 @@ class CallKitManager : NSObject(), CXProviderDelegateProtocol {
 
         provider.reportNewIncomingCallWithUUID(uuid, update) { error ->
             if (error != null) {
-                println("Error reporting incoming call: ${error.localizedDescription}")
-                activeCallUUID = null
+                println("CallKit: Error reporting incoming call: ${error.localizedDescription}")
+                // Don't clear activeCallUUID - call can still work without CallKit UI
+            } else {
+                println("CallKit: Incoming call reported successfully")
             }
             completion?.invoke(error)
         }
     }
 
     // Начать исходящий звонок
-    fun startOutgoingCall(uuid: NSUUID, handle: String) {
+    fun startOutgoingCall(uuid: NSUUID, handle: String, onResult: ((Boolean) -> Unit)? = null) {
         activeCallUUID = uuid
+        println("CallKit: Starting outgoing call to $handle")
 
         val callHandle = CXHandle(CXHandleTypeGeneric, handle)
         val startAction = CXStartCallAction(uuid, callHandle)
@@ -64,8 +68,12 @@ class CallKitManager : NSObject(), CXProviderDelegateProtocol {
         val transaction = CXTransaction(startAction)
         callController.requestTransaction(transaction) { error ->
             if (error != null) {
-                println("Error starting call: ${error.localizedDescription}")
-                activeCallUUID = null
+                println("CallKit: Error starting outgoing call: ${error.localizedDescription}")
+                // Don't clear activeCallUUID - call can still work without CallKit
+                onResult?.invoke(false)
+            } else {
+                println("CallKit: Outgoing call started successfully")
+                onResult?.invoke(true)
             }
         }
     }

@@ -3,7 +3,9 @@ platform :ios, '15.0'
 target 'iosApp' do
   use_frameworks!
 
-  pod 'GoogleWebRTC', '~> 1.1'
+  # WebRTC is now added via Swift Package Manager (SPM)
+  # See README for SPM setup instructions:
+  # https://github.com/stasel/WebRTC.git - Version 141.0.0
 end
 
 post_install do |installer|

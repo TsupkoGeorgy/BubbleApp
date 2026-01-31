@@ -73,6 +73,20 @@ sealed class SignalMessage {
         val ip: String,
         val port: Int
     ) : SignalMessage()
+
+    @Serializable
+    @SerialName("encryption_key")
+    data class EncryptionKey(
+        override val targetId: String,
+        val key: String  // Base64 encoded AES key
+    ) : SignalMessage()
+
+    @Serializable
+    @SerialName("audio_data")
+    data class AudioData(
+        override val targetId: String,
+        val data: String  // Base64 encoded encrypted audio
+    ) : SignalMessage()
 }
 
 enum class CallState {
