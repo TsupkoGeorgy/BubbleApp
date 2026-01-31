@@ -6,18 +6,23 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/api")
 class StatusController(
     private val signalingHandler: SignalingHandler
 ) {
 
-    @GetMapping("/health")
-    fun health(): Map<String, Any> = mapOf(
+    @GetMapping("/status")
+    fun status(): Map<String, Any> = mapOf(
         "status" to "ok",
-        "service" to "bubble-signaling"
+        "service" to "bubble-app"
     )
 
-    @GetMapping("/users/online")
+    @GetMapping("/api/health")
+    fun health(): Map<String, Any> = mapOf(
+        "status" to "ok",
+        "service" to "bubble-app"
+    )
+
+    @GetMapping("/api/users/online")
     fun onlineUsers(): Map<String, Any> {
         val usersWithInfo = signalingHandler.getOnlineUsersWithInfo()
         return mapOf(
@@ -26,7 +31,7 @@ class StatusController(
         )
     }
 
-    @GetMapping("/users/{userId}/online")
+    @GetMapping("/api/users/{userId}/online")
     fun isUserOnline(@PathVariable userId: String): Map<String, Boolean> = mapOf(
         "online" to signalingHandler.isUserOnline(userId)
     )

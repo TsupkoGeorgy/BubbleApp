@@ -1,5 +1,6 @@
 package org.example.bubbleapp.signaling
 
+import org.example.bubbleapp.websocket.JwtWebSocketInterceptor
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.socket.config.annotation.EnableWebSocket
@@ -10,12 +11,14 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 @Configuration
 @EnableWebSocket
 class WebSocketConfig(
-    private val signalingHandler: SignalingHandler
+    private val signalingHandler: SignalingHandler,
+    private val jwtWebSocketInterceptor: JwtWebSocketInterceptor
 ) : WebSocketConfigurer {
 
     override fun registerWebSocketHandlers(registry: WebSocketHandlerRegistry) {
         registry
             .addHandler(signalingHandler, "/call")
+            .addInterceptors(jwtWebSocketInterceptor)
             .setAllowedOrigins("*")
     }
 
