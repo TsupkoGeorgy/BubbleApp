@@ -6,6 +6,8 @@ import org.example.bubbleapp.auth.service.InvalidCodeException
 import org.example.bubbleapp.auth.service.InvalidTokenException
 import org.example.bubbleapp.chat.service.ChatAccessDeniedException
 import org.example.bubbleapp.chat.service.ChatOperationException
+import org.example.bubbleapp.message.service.MessageAccessDeniedException
+import org.example.bubbleapp.message.service.MessageValidationException
 import org.example.bubbleapp.user.service.UsernameAlreadyExistsException
 import org.example.bubbleapp.common.dto.ErrorResponse
 import org.example.bubbleapp.common.dto.ValidationErrorResponse
@@ -201,6 +203,42 @@ class GlobalExceptionHandler {
                 ErrorResponse(
                     error = ex.message ?: "Access denied to chat",
                     code = "CHAT_ACCESS_DENIED",
+                    path = request.requestURI
+                )
+            )
+    }
+
+    @ExceptionHandler(MessageValidationException::class)
+    fun handleMessageValidation(
+        ex: MessageValidationException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        log.warn("Message validation error: ${ex.message}")
+
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(
+                ErrorResponse(
+                    error = ex.message ?: "Message validation failed",
+                    code = "MESSAGE_VALIDATION_ERROR",
+                    path = request.requestURI
+                )
+            )
+    }
+
+    @ExceptionHandler(MessageAccessDeniedException::class)
+    fun handleMessageAccessDenied(
+        ex: MessageAccessDeniedException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        log.warn("Message access denied: ${ex.message}")
+
+        return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(
+                ErrorResponse(
+                    error = ex.message ?: "Access denied to message",
+                    code = "MESSAGE_ACCESS_DENIED",
                     path = request.requestURI
                 )
             )
