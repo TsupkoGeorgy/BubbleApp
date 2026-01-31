@@ -10,6 +10,7 @@ import org.example.bubbleapp.message.entity.MessageType
 import org.example.bubbleapp.message.repository.MessageRepository
 import org.example.bubbleapp.user.entity.User
 import org.example.bubbleapp.user.repository.UserRepository
+import org.example.bubbleapp.notification.PushNotificationService
 import org.example.bubbleapp.websocket.chat.ChatWebSocketHandler
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
@@ -23,7 +24,8 @@ class MessageService(
     private val chatRepository: ChatRepository,
     private val chatMemberRepository: ChatMemberRepository,
     private val userRepository: UserRepository,
-    private val chatWebSocketHandler: ChatWebSocketHandler
+    private val chatWebSocketHandler: ChatWebSocketHandler,
+    private val pushNotificationService: PushNotificationService
 ) {
     private val log = LoggerFactory.getLogger(MessageService::class.java)
 
@@ -68,6 +70,19 @@ class MessageService(
 
         // Broadcast to WebSocket subscribers
         chatWebSocketHandler.broadcastNewMessage(chatId, response)
+
+        // Send push notifications to other chat members
+        val chatMembers = chatMemberRepository.findAllByChatId(chatId)
+        chatMembers.forEach { member ->
+            if (member.user.id != senderId) {
+                pushNotificationService.sendNewMessageNotification(
+                    recipientUserId = member.user.id,
+                    chatId = chatId,
+                    chatName = chat.name,
+                    message = response
+                )
+            }
+        }
 
         return response
     }
