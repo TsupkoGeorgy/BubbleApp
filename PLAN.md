@@ -148,7 +148,30 @@ enum class ChatType { PRIVATE, GROUP }
 - [ ] Счётчик непрочитанных
 - [ ] Онлайн-индикатор
 - [ ] Pull-to-refresh
-- [ ] Создание нового чата
+- [ ] Создание нового приватного чата (1-на-1)
+
+## И5.1. Групповые чаты
+- [ ] `CreateGroupScreen` — создание группы
+  - Название группы
+  - Выбор участников (мульти-выбор из контактов)
+  - Аватар группы (опционально)
+- [ ] Роли участников:
+  - **OWNER** — создатель группы, полные права
+  - **ADMIN** — может добавлять/удалять участников
+  - **MEMBER** — обычный участник
+- [ ] `GroupSettingsScreen` — настройки группы (для OWNER/ADMIN)
+  - Изменение названия
+  - Изменение аватара
+  - Список участников с ролями
+  - Добавление участников
+  - Удаление участников
+  - Назначение админов (только OWNER)
+  - Выход из группы
+- [ ] UI отличия групп от приватных чатов:
+  - Название группы в header (не имя собеседника)
+  - Показ имени отправителя над каждым сообщением
+  - Иконка группы вместо аватара пользователя
+  - Счётчик участников
 
 ## И6. Экран чата
 - [ ] `ChatScreen` — переписка
@@ -243,3 +266,102 @@ enum class ChatType { PRIVATE, GROUP }
 | Бэкенд | iOS |
 |--------|-----|
 | Б10 | И13 |
+
+---
+
+# РЕФАКТОРИНГ: Архитектура iOS
+
+## Проблема
+Сейчас сетевые запросы и бизнес-логика находятся прямо в Composable функциях (внутри `rememberCoroutineScope().launch`). Это нарушает принцип разделения ответственности.
+
+## Целевая архитектура
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      UI Layer                           │
+│  Composable functions — ТОЛЬКО отрисовка               │
+│  - Подписка на StateFlow из ViewModel                  │
+│  - Вызов методов ViewModel по событиям (onClick и тд)  │
+│  - Никакой бизнес-логики, никаких suspend функций      │
+└─────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│                   ViewModel Layer                       │
+│  - Держит UI State (StateFlow)                         │
+│  - Обрабатывает Intent/Event от UI                     │
+│  - Запускает корутины в viewModelScope                 │
+│  - Вызывает Repository/UseCase                         │
+└─────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│                    Data Layer                           │
+│  Repository — единая точка доступа к данным            │
+│  - Координирует API и локальный кэш                    │
+│  - Возвращает Flow для реактивных данных               │
+│                                                         │
+│  ApiClient — HTTP запросы                              │
+│  LocalDatabase — SQLDelight/Room                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Задачи рефакторинга
+
+### Р1. Создать ViewModel'и
+- [ ] `AuthViewModel` — логин, верификация кода, профиль
+- [ ] `ChatsViewModel` — список чатов, создание чата
+- [ ] `ChatViewModel` — сообщения конкретного чата
+- [ ] `ProfileViewModel` — редактирование профиля
+
+### Р2. Вынести состояние в ViewModel
+```kotlin
+// Было (плохо):
+@Composable
+fun SomeScreen() {
+    var isLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Button(onClick = {
+        scope.launch {
+            isLoading = true
+            apiClient.doSomething()  // ❌ API в UI
+            isLoading = false
+        }
+    })
+}
+
+// Должно быть (хорошо):
+@Composable
+fun SomeScreen(viewModel: SomeViewModel) {
+    val state by viewModel.state.collectAsState()
+
+    Button(onClick = { viewModel.onButtonClick() })  // ✅ Только вызов
+}
+
+class SomeViewModel(private val repository: SomeRepository) : ViewModel() {
+    private val _state = MutableStateFlow(SomeState())
+    val state: StateFlow<SomeState> = _state
+
+    fun onButtonClick() {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+            repository.doSomething()
+            _state.update { it.copy(isLoading = false) }
+        }
+    }
+}
+```
+
+### Р3. Создать Repository слой
+- [ ] `AuthRepository` — авторизация + хранение токенов
+- [ ] `ChatRepository` — чаты + кэш
+- [ ] `MessageRepository` — сообщения + очередь отправки
+- [ ] `UserRepository` — профили пользователей
+
+### Р4. Добавить DI
+- [ ] Koin или manual DI для инъекции зависимостей
+- [ ] Убрать глобальный singleton `AppState`
+
+## Приоритет
+Рефакторинг можно делать постепенно при добавлении новых фич, не переписывая всё сразу.

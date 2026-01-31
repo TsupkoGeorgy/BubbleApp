@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -51,14 +52,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.example.bubbleapp.call.CallManager
 import org.example.bubbleapp.call.CallState
+import org.example.bubbleapp.data.auth.AuthState
+import org.example.bubbleapp.ui.auth.PhoneInputScreen
+import org.example.bubbleapp.ui.auth.CodeVerifyScreen
+import org.example.bubbleapp.ui.auth.ProfileSetupScreen
+import org.example.bubbleapp.ui.chat.ChatsListScreen
 import kotlin.math.PI
 import kotlin.math.atan2
 
 // Навигация
 enum class Screen {
+    // Auth
+    PhoneInput,
+    CodeVerify,
+    ProfileSetup,
+    // Main
     Home,
     Bubbles,
-    Calls
+    Calls,
+    Chats
 }
 
 // Состояние транскрипции
@@ -81,13 +93,46 @@ expect fun getCachedTranscription(fileName: String): String?
 
 @Composable
 fun App() {
+    val scope = rememberCoroutineScope()
+    val appState = remember { getAppState(scope) }
+    val isInitialized by appState.isInitialized.collectAsState()
+    val authState by appState.authService.authState.collectAsState()
+
     MaterialTheme {
-        var currentScreen by remember { mutableStateOf(Screen.Home) }
+        if (!isInitialized) {
+            // Loading screen
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF1a1a2e)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Bubble",
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+            return@MaterialTheme
+        }
+
+        // Determine initial screen based on auth state
+        var currentScreen by remember(authState) {
+            mutableStateOf(
+                when (authState) {
+                    is AuthState.Authenticated -> Screen.Home
+                    else -> Screen.PhoneInput
+                }
+            )
+        }
+
+        val authViewModel = appState.authViewModel
 
         AnimatedContent(
             targetState = currentScreen,
             transitionSpec = {
-                if (targetState == Screen.Home) {
+                if (targetState.ordinal < initialState.ordinal) {
                     (slideInHorizontally { -it } + fadeIn()) togetherWith
                             (slideOutHorizontally { it } + fadeOut())
                 } else {
@@ -97,15 +142,49 @@ fun App() {
             }
         ) { screen ->
             when (screen) {
+                // Auth screens
+                Screen.PhoneInput -> PhoneInputScreen(
+                    viewModel = authViewModel,
+                    onCodeSent = { currentScreen = Screen.CodeVerify }
+                )
+
+                Screen.CodeVerify -> CodeVerifyScreen(
+                    viewModel = authViewModel,
+                    onBack = { currentScreen = Screen.PhoneInput },
+                    onVerified = { isNewUser ->
+                        currentScreen = if (isNewUser) Screen.ProfileSetup else Screen.Home
+                    }
+                )
+
+                Screen.ProfileSetup -> ProfileSetupScreen(
+                    viewModel = authViewModel,
+                    onComplete = { currentScreen = Screen.Home }
+                )
+
+                // Main screens
                 Screen.Home -> HomeScreen(
                     onNavigateToBubbles = { currentScreen = Screen.Bubbles },
-                    onNavigateToCalls = { currentScreen = Screen.Calls }
+                    onNavigateToCalls = { currentScreen = Screen.Calls },
+                    onNavigateToChats = { currentScreen = Screen.Chats },
+                    onLogout = {
+                        scope.launch {
+                            appState.authService.logout()
+                            currentScreen = Screen.PhoneInput
+                        }
+                    }
                 )
+
                 Screen.Bubbles -> BubblesScreen(
                     onBack = { currentScreen = Screen.Home }
                 )
+
                 Screen.Calls -> CallsScreen(
                     onBack = { currentScreen = Screen.Home }
+                )
+
+                Screen.Chats -> ChatsListScreen(
+                    onBack = { currentScreen = Screen.Home },
+                    appState = appState
                 )
             }
         }
@@ -115,17 +194,30 @@ fun App() {
 @Composable
 fun HomeScreen(
     onNavigateToBubbles: () -> Unit,
-    onNavigateToCalls: () -> Unit
+    onNavigateToCalls: () -> Unit,
+    onNavigateToChats: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF1a1a2e)),
-        contentAlignment = Alignment.Center
+            .background(Color(0xFF1a1a2e))
     ) {
+        // Logout button in top right
+        Text(
+            text = "Выйти",
+            fontSize = 14.sp,
+            color = Color.White.copy(alpha = 0.6f),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .clickable { onLogout() }
+        )
+
         Column(
+            modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(32.dp)
+            verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = "Bubble",
@@ -135,6 +227,54 @@ fun HomeScreen(
             )
 
             Spacer(modifier = Modifier.height(48.dp))
+
+            // Кнопка чатов
+            Card(
+                modifier = Modifier
+                    .width(280.dp)
+                    .clickable { onNavigateToChats() },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF4CAF50)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "M",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Чаты",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Сообщения и кружки",
+                            fontSize = 14.sp,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Кнопка кружков
             Card(
@@ -181,6 +321,8 @@ fun HomeScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Кнопка звонков
             Card(
