@@ -133,7 +133,7 @@ data class Attachment(id, type, url, thumbnailUrl, duration, size)
 
 enum class MessageType { TEXT, VIDEO_BUBBLE, VOICE, STICKER }
 enum class MessageStatus { SENDING, SENT, DELIVERED, READ, FAILED }
-enum class ChatType { PRIVATE, GROUP }
+enum class ChatType { DIRECT, GROUP }
 ```
 
 ## И4. Авторизация (UI)
@@ -291,7 +291,17 @@ enum class ChatType { PRIVATE, GROUP }
 │  - Держит UI State (StateFlow)                         │
 │  - Обрабатывает Intent/Event от UI                     │
 │  - Запускает корутины в viewModelScope                 │
-│  - Вызывает Repository/UseCase                         │
+│  - Вызывает UseCase (не Repository напрямую)           │
+└─────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│                   Domain Layer (UseCase)                │
+│  UseCase — единица бизнес-логики                       │
+│  - Один UseCase = одно действие                        │
+│  - Комбинирует несколько Repository при необходимости  │
+│  - Содержит бизнес-правила и валидацию                 │
+│  - Не знает про UI (чистая логика)                     │
 └─────────────────────────────────────────────────────────┘
                             │
                             ▼
@@ -362,6 +372,54 @@ class SomeViewModel(private val repository: SomeRepository) : ViewModel() {
 ### Р4. Добавить DI
 - [ ] Koin или manual DI для инъекции зависимостей
 - [ ] Убрать глобальный singleton `AppState`
+
+### Р5. Создать UseCase слой (по мере необходимости)
+UseCase нужен когда есть бизнес-логика, которая:
+- Комбинирует данные из нескольких источников
+- Содержит валидацию или бизнес-правила
+- Переиспользуется в разных ViewModel'ях
+
+Примеры UseCase'ов:
+- [ ] `SendMessageUseCase` — отправка сообщения + загрузка attachment + оптимистичное обновление UI
+- [ ] `CreateChatUseCase` — проверка существующего чата + создание нового
+- [ ] `LoginUseCase` — отправка кода + верификация + сохранение токенов + загрузка профиля
+- [ ] `SyncChatsUseCase` — синхронизация чатов с сервером + обновление кэша
+- [ ] `UploadVideoBubbleUseCase` — сжатие видео + загрузка + создание сообщения
+
+```kotlin
+// Пример UseCase
+class SendMessageUseCase(
+    private val messageRepository: MessageRepository,
+    private val attachmentRepository: AttachmentRepository
+) {
+    suspend operator fun invoke(
+        chatId: String,
+        text: String?,
+        attachments: List<LocalFile>
+    ): Result<Message> {
+        // 1. Загрузить attachments если есть
+        val uploadedIds = attachments.map { file ->
+            attachmentRepository.upload(file).getOrThrow().id
+        }
+
+        // 2. Отправить сообщение
+        return messageRepository.send(chatId, text, uploadedIds)
+    }
+}
+
+// Использование в ViewModel
+class ChatViewModel(private val sendMessage: SendMessageUseCase) {
+    fun onSendClick(text: String) {
+        viewModelScope.launch {
+            sendMessage(chatId, text, attachments)
+        }
+    }
+}
+```
+
+**Когда НЕ нужен UseCase:**
+- Простой CRUD без логики (просто проксирует Repository)
+- Один источник данных, нет комбинирования
 
 ## Приоритет
 Рефакторинг можно делать постепенно при добавлении новых фич, не переписывая всё сразу.
