@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletRequest
 import org.example.bubbleapp.attachment.service.InvalidFileException
 import org.example.bubbleapp.auth.service.InvalidCodeException
 import org.example.bubbleapp.auth.service.InvalidTokenException
+import org.example.bubbleapp.chat.service.ChatAccessDeniedException
+import org.example.bubbleapp.chat.service.ChatOperationException
 import org.example.bubbleapp.user.service.UsernameAlreadyExistsException
 import org.example.bubbleapp.common.dto.ErrorResponse
 import org.example.bubbleapp.common.dto.ValidationErrorResponse
@@ -163,6 +165,42 @@ class GlobalExceptionHandler {
                 ErrorResponse(
                     error = ex.message ?: "Invalid file",
                     code = "INVALID_FILE",
+                    path = request.requestURI
+                )
+            )
+    }
+
+    @ExceptionHandler(ChatOperationException::class)
+    fun handleChatOperation(
+        ex: ChatOperationException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        log.warn("Chat operation error: ${ex.message}")
+
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(
+                ErrorResponse(
+                    error = ex.message ?: "Chat operation failed",
+                    code = "CHAT_OPERATION_ERROR",
+                    path = request.requestURI
+                )
+            )
+    }
+
+    @ExceptionHandler(ChatAccessDeniedException::class)
+    fun handleChatAccessDenied(
+        ex: ChatAccessDeniedException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        log.warn("Chat access denied: ${ex.message}")
+
+        return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(
+                ErrorResponse(
+                    error = ex.message ?: "Access denied to chat",
+                    code = "CHAT_ACCESS_DENIED",
                     path = request.requestURI
                 )
             )
