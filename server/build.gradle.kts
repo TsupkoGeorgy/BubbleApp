@@ -41,6 +41,9 @@ dependencies {
     // OpenAPI / Swagger
     implementation(libs.springdoc.openapi)
 
+    // JSON Logging
+    implementation(libs.logstash.logback)
+
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.kotlin.test)
 }

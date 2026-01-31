@@ -39,7 +39,19 @@ s3:
   secret-key: ${S3_SECRET_KEY:minioadmin}
   bucket: ${S3_BUCKET:bubbleapp}
 
+push:
+  fcm:
+    enabled: ${FCM_ENABLED:false}
+    server-key: ${FCM_SERVER_KEY:}
+  apns:
+    enabled: ${APNS_ENABLED:false}
+    key-id: ${APNS_KEY_ID:}
+    team-id: ${APNS_TEAM_ID:}
+    bundle-id: ${APNS_BUNDLE_ID:org.example.bubbleapp}
+
 logging:
+  file:
+    path: ${LOG_PATH:./logs}
   level:
     org.example.bubbleapp: DEBUG
     org.springframework.web.socket: INFO
