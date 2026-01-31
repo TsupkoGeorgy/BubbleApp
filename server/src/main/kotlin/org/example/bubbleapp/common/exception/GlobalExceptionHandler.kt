@@ -1,8 +1,10 @@
 package org.example.bubbleapp.common.exception
 
 import jakarta.servlet.http.HttpServletRequest
+import org.example.bubbleapp.attachment.service.InvalidFileException
 import org.example.bubbleapp.auth.service.InvalidCodeException
 import org.example.bubbleapp.auth.service.InvalidTokenException
+import org.example.bubbleapp.user.service.UsernameAlreadyExistsException
 import org.example.bubbleapp.common.dto.ErrorResponse
 import org.example.bubbleapp.common.dto.ValidationErrorResponse
 import org.slf4j.LoggerFactory
@@ -125,6 +127,42 @@ class GlobalExceptionHandler {
                 ErrorResponse(
                     error = ex.message ?: "Resource not found",
                     code = "NOT_FOUND",
+                    path = request.requestURI
+                )
+            )
+    }
+
+    @ExceptionHandler(UsernameAlreadyExistsException::class)
+    fun handleUsernameExists(
+        ex: UsernameAlreadyExistsException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        log.warn("Username conflict: ${ex.message}")
+
+        return ResponseEntity
+            .status(HttpStatus.CONFLICT)
+            .body(
+                ErrorResponse(
+                    error = ex.message ?: "Username already exists",
+                    code = "USERNAME_TAKEN",
+                    path = request.requestURI
+                )
+            )
+    }
+
+    @ExceptionHandler(InvalidFileException::class)
+    fun handleInvalidFile(
+        ex: InvalidFileException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        log.warn("Invalid file: ${ex.message}")
+
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(
+                ErrorResponse(
+                    error = ex.message ?: "Invalid file",
+                    code = "INVALID_FILE",
                     path = request.requestURI
                 )
             )
