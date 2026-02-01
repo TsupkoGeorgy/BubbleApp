@@ -17,30 +17,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
-import org.example.bubbleapp.AppState
 import org.example.bubbleapp.data.model.Chat
 
 @Composable
 fun ChatsListScreen(
+    viewModel: ChatsViewModel,
     onBack: () -> Unit,
-    appState: AppState,
     onChatClick: (Chat) -> Unit = {}
 ) {
-    val scope = rememberCoroutineScope()
-    var chats by remember { mutableStateOf<List<Chat>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var showNewChatDialog by remember { mutableStateOf(false) }
+    val state by viewModel.state.collectAsState()
+    val dialogState by viewModel.dialogState.collectAsState()
 
-    // Load chats
+    // Подписка на one-time события
     LaunchedEffect(Unit) {
-        try {
-            chats = appState.apiClient.getChats()
-            isLoading = false
-        } catch (e: Exception) {
-            errorMessage = e.message
-            isLoading = false
+        viewModel.events.collect { event ->
+            when (event) {
+                is ChatsEvent.ChatCreated -> onChatClick(event.chat)
+            }
         }
     }
 
@@ -81,7 +74,7 @@ fun ChatsListScreen(
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF6C63FF))
-                        .clickable { showNewChatDialog = true },
+                        .clickable { viewModel.showNewChatDialog() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -94,7 +87,7 @@ fun ChatsListScreen(
 
             // Content
             when {
-                isLoading -> {
+                state.isLoading -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -103,31 +96,20 @@ fun ChatsListScreen(
                     }
                 }
 
-                errorMessage != null -> {
+                state.errorMessage != null -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = errorMessage ?: "Ошибка",
+                                text = state.errorMessage ?: "Ошибка",
                                 color = Color(0xFFFF6B6B),
                                 fontSize = 16.sp
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
-                                onClick = {
-                                    isLoading = true
-                                    errorMessage = null
-                                    scope.launch {
-                                        try {
-                                            chats = appState.apiClient.getChats()
-                                        } catch (e: Exception) {
-                                            errorMessage = e.message
-                                        }
-                                        isLoading = false
-                                    }
-                                },
+                                onClick = { viewModel.loadChats() },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF6C63FF)
                                 )
@@ -138,7 +120,7 @@ fun ChatsListScreen(
                     }
                 }
 
-                chats.isEmpty() -> {
+                state.chats.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -164,7 +146,7 @@ fun ChatsListScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(horizontal = 16.dp)
                     ) {
-                        items(chats) { chat ->
+                        items(state.chats) { chat ->
                             ChatListItem(
                                 chat = chat,
                                 onClick = { onChatClick(chat) }
@@ -176,31 +158,13 @@ fun ChatsListScreen(
         }
 
         // New chat dialog
-        if (showNewChatDialog) {
+        if (dialogState.isVisible) {
             NewChatDialog(
-                onDismiss = { showNewChatDialog = false },
-                onCreateChat = { phone ->
-                    scope.launch {
-                        try {
-                            // Search for user by phone
-                            val users = appState.apiClient.searchUsers(phone)
-                            if (users.isNotEmpty()) {
-                                val user = users.first()
-                                // Create private chat
-                                val chat = appState.apiClient.createChat(
-                                    org.example.bubbleapp.data.api.CreateChatRequest(
-                                        type = "DIRECT",
-                                        memberIds = listOf(user.id)
-                                    )
-                                )
-                                chats = listOf(chat) + chats
-                                showNewChatDialog = false
-                            }
-                        } catch (e: Exception) {
-                            // Handle error
-                        }
-                    }
-                }
+                state = dialogState,
+                onDismiss = { viewModel.hideNewChatDialog() },
+                onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
+                onSearch = { viewModel.searchUsers() },
+                onUserSelected = { viewModel.createChatWithUser(it) }
             )
         }
     }
@@ -310,46 +274,155 @@ private fun ChatListItem(
 
 @Composable
 private fun NewChatDialog(
+    state: NewChatDialogState,
     onDismiss: () -> Unit,
-    onCreateChat: (phone: String) -> Unit
+    onSearchQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
+    onUserSelected: (org.example.bubbleapp.data.model.User) -> Unit
 ) {
-    var phone by remember { mutableStateOf("") }
-
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!state.isCreating) onDismiss() },
         title = {
             Text("Новый чат", color = Color.White)
         },
         text = {
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it },
-                label = { Text("Телефон или username") },
-                placeholder = { Text("+7...") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = Color(0xFF6C63FF),
-                    unfocusedBorderColor = Color.Gray,
-                    focusedLabelColor = Color(0xFF6C63FF),
-                    unfocusedLabelColor = Color.Gray,
-                    cursorColor = Color.White
+            Column {
+                // Search field
+                OutlinedTextField(
+                    value = state.searchQuery,
+                    onValueChange = onSearchQueryChanged,
+                    label = { Text("Телефон") },
+                    placeholder = { Text("+7...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !state.isCreating,
+                    trailingIcon = {
+                        if (state.isSearching) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = Color(0xFF6C63FF),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF6C63FF),
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF6C63FF),
+                        unfocusedLabelColor = Color.Gray,
+                        cursorColor = Color.White,
+                        disabledTextColor = Color.White.copy(alpha = 0.5f),
+                        disabledBorderColor = Color.Gray.copy(alpha = 0.5f)
+                    )
                 )
-            )
+
+                // Error message
+                state.errorMessage?.let { error ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = error,
+                        color = Color(0xFFFF6B6B),
+                        fontSize = 12.sp
+                    )
+                }
+
+                // Search results
+                if (state.searchResults.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Результаты:",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    state.searchResults.forEach { user ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clickable(enabled = !state.isCreating) { onUserSelected(user) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFF3a3a5e)
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Avatar
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF6C63FF)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = (user.displayName?.firstOrNull()
+                                            ?: user.username?.firstOrNull()
+                                            ?: user.phone.lastOrNull()
+                                            ?: '?').toString().uppercase(),
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = user.displayName ?: user.username ?: user.phone,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White
+                                    )
+                                    if (user.displayName != null || user.username != null) {
+                                        Text(
+                                            text = user.phone,
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
+
+                                if (state.isCreating) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color(0xFF6C63FF),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreateChat(phone) },
-                enabled = phone.isNotBlank()
+                onClick = onSearch,
+                enabled = state.searchQuery.isNotBlank() && !state.isSearching && !state.isCreating
             ) {
-                Text("Создать", color = Color(0xFF6C63FF))
+                Text(
+                    "Найти",
+                    color = if (state.searchQuery.isNotBlank() && !state.isSearching && !state.isCreating)
+                        Color(0xFF6C63FF) else Color.Gray
+                )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Отмена", color = Color.Gray)
+            TextButton(
+                onClick = onDismiss,
+                enabled = !state.isCreating
+            ) {
+                Text("Отмена", color = if (!state.isCreating) Color.Gray else Color.Gray.copy(alpha = 0.5f))
             }
         },
         containerColor = Color(0xFF2a2a4e)

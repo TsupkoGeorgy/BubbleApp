@@ -183,8 +183,11 @@ fun App() {
                 )
 
                 Screen.Chats -> ChatsListScreen(
+                    viewModel = appState.chatsViewModel,
                     onBack = { currentScreen = Screen.Home },
-                    appState = appState
+                    onChatClick = { chat ->
+                        // TODO: Navigate to ChatScreen when implemented
+                    }
                 )
             }
         }

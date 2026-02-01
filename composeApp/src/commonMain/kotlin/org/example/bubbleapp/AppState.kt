@@ -10,7 +10,10 @@ import org.example.bubbleapp.data.auth.AuthService
 import org.example.bubbleapp.data.auth.AuthState
 import org.example.bubbleapp.data.auth.TokenManager
 import org.example.bubbleapp.data.auth.TokenStorage
+import org.example.bubbleapp.data.repository.ChatRepository
+import org.example.bubbleapp.data.repository.UserRepository
 import org.example.bubbleapp.ui.auth.AuthViewModel
+import org.example.bubbleapp.ui.chat.ChatsViewModel
 
 class AppState(
     private val scope: CoroutineScope,
@@ -22,13 +25,21 @@ class AppState(
         const val DEFAULT_BASE_URL = "http://127.0.0.1:8080"
     }
 
+    // Data layer
     private val tokenStorage = TokenStorage()
     val tokenManager = TokenManager(tokenStorage)
     val apiClient = ApiClient(baseUrl, tokenManager)
+
+    // Repositories
+    val chatRepository = ChatRepository(apiClient)
+    val userRepository = UserRepository(apiClient)
+
+    // Services
     val authService = AuthService(apiClient, tokenManager)
 
     // ViewModels
     val authViewModel = AuthViewModel(authService, scope)
+    val chatsViewModel = ChatsViewModel(chatRepository, userRepository, scope)
 
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized
