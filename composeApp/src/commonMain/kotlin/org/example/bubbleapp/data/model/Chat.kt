@@ -22,7 +22,14 @@ data class Chat(
 @Serializable
 data class ChatMember(
     val userId: String,
+    val phone: String? = null,
+    val username: String? = null,
+    val displayName: String? = null,
+    val avatarUrl: String? = null,
     val role: String, // "OWNER", "ADMIN", "MEMBER"
-    val joinedAt: String? = null,
-    val user: User? = null
-)
+    val joinedAt: String? = null
+) {
+    /** Получить отображаемое имя участника */
+    val name: String
+        get() = displayName ?: username ?: phone ?: "Unknown"
+}

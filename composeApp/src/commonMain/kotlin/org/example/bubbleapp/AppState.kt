@@ -14,6 +14,7 @@ import org.example.bubbleapp.data.repository.AttachmentRepository
 import org.example.bubbleapp.data.repository.ChatRepository
 import org.example.bubbleapp.data.repository.MessageRepository
 import org.example.bubbleapp.data.repository.UserRepository
+import org.example.bubbleapp.data.websocket.ChatWebSocketManager
 import org.example.bubbleapp.ui.auth.AuthViewModel
 import org.example.bubbleapp.ui.chat.ChatsViewModel
 
@@ -23,8 +24,11 @@ class AppState(
 ) {
     companion object {
         // For iOS simulator use your Mac's IP or use ngrok
-        // localhost doesn't work on iOS simulator
-        const val DEFAULT_BASE_URL = "http://127.0.0.1:8080"
+        // Use your Mac's local IP for real device testing
+        // localhost/127.0.0.1 doesn't work on real devices
+        const val DEFAULT_BASE_URL = "http://192.168.0.199:8080"
+        val DEFAULT_WS_URL: String
+            get() = DEFAULT_BASE_URL.replace("http://", "ws://") + "/ws/chat"
     }
 
     // Data layer
@@ -32,18 +36,25 @@ class AppState(
     val tokenManager = TokenManager(tokenStorage)
     val apiClient = ApiClient(baseUrl, tokenManager)
 
+    // WebSocket
+    val chatWebSocketManager = ChatWebSocketManager(
+        wsUrl = baseUrl.replace("http://", "ws://") + "/ws/chat",
+        tokenManager = tokenManager,
+        scope = scope
+    )
+
     // Repositories
     val chatRepository = ChatRepository(apiClient)
     val userRepository = UserRepository(apiClient)
     val attachmentRepository = AttachmentRepository(apiClient)
-    val messageRepository = MessageRepository(apiClient, attachmentRepository)
+    val messageRepository = MessageRepository(apiClient, attachmentRepository, chatWebSocketManager)
 
     // Services
     val authService = AuthService(apiClient, tokenManager)
 
     // ViewModels
     val authViewModel = AuthViewModel(authService, scope)
-    val chatsViewModel = ChatsViewModel(chatRepository, userRepository, scope)
+    val chatsViewModel = ChatsViewModel(chatRepository, userRepository, scope, chatWebSocketManager)
 
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized
@@ -52,6 +63,21 @@ class AppState(
         scope.launch {
             authService.initialize()
             _isInitialized.value = true
+
+            // Connect WebSocket if authenticated
+            if (authService.authState.value is AuthState.Authenticated) {
+                chatWebSocketManager.connect()
+            }
+        }
+
+        // Observe auth state and connect/disconnect WebSocket
+        scope.launch {
+            authService.authState.collect { state ->
+                when (state) {
+                    is AuthState.Authenticated -> chatWebSocketManager.connect()
+                    else -> chatWebSocketManager.disconnect()
+                }
+            }
         }
     }
 }

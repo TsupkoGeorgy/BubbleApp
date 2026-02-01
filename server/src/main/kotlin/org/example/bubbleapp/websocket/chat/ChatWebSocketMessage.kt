@@ -8,6 +8,7 @@ import java.util.UUID
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(
+    JsonSubTypes.Type(value = ChatWsMessage.NewChat::class, name = "NEW_CHAT"),
     JsonSubTypes.Type(value = ChatWsMessage.NewMessage::class, name = "NEW_MESSAGE"),
     JsonSubTypes.Type(value = ChatWsMessage.MessageEdited::class, name = "MESSAGE_EDITED"),
     JsonSubTypes.Type(value = ChatWsMessage.MessageDeleted::class, name = "MESSAGE_DELETED"),
@@ -20,6 +21,14 @@ import java.util.UUID
 )
 sealed class ChatWsMessage {
     abstract val type: String
+
+    data class NewChat(
+        override val type: String = "NEW_CHAT",
+        val chatId: UUID,
+        val chatName: String?,
+        val chatType: String,
+        val createdBy: UUID
+    ) : ChatWsMessage()
 
     data class NewMessage(
         override val type: String = "NEW_MESSAGE",

@@ -10,6 +10,7 @@ import org.example.bubbleapp.chat.repository.ChatRepository
 import org.example.bubbleapp.common.exception.EntityNotFoundException
 import org.example.bubbleapp.user.entity.User
 import org.example.bubbleapp.user.repository.UserRepository
+import org.example.bubbleapp.websocket.chat.ChatWebSocketHandler
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -19,7 +20,8 @@ import java.util.UUID
 class ChatService(
     private val chatRepository: ChatRepository,
     private val chatMemberRepository: ChatMemberRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val chatWebSocketHandler: ChatWebSocketHandler
 ) {
     private val log = LoggerFactory.getLogger(ChatService::class.java)
 
@@ -63,6 +65,16 @@ class ChatService(
 
         val savedChat = chatRepository.save(chat)
         log.info("Chat ${savedChat.id} created by user $currentUserId")
+
+        // Notify other members about new chat via WebSocket
+        val memberIds = savedChat.members.map { it.user.id }
+        chatWebSocketHandler.broadcastNewChat(
+            chatId = savedChat.id,
+            chatName = savedChat.name,
+            chatType = savedChat.type.name,
+            createdBy = currentUserId,
+            memberIds = memberIds
+        )
 
         return savedChat.toResponse()
     }

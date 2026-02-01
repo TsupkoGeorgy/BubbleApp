@@ -6,10 +6,12 @@ import org.example.bubbleapp.data.api.ApiClient
 import org.example.bubbleapp.data.api.ApiException
 import org.example.bubbleapp.data.api.SendMessageRequest
 import org.example.bubbleapp.data.model.Message
+import org.example.bubbleapp.data.websocket.ChatWebSocketManager
 
 class MessageRepository(
     private val apiClient: ApiClient,
-    private val attachmentRepository: AttachmentRepository? = null
+    private val attachmentRepository: AttachmentRepository? = null,
+    private val webSocketManager: ChatWebSocketManager? = null
 ) {
     // In-memory cache per chat
     private val messagesCache = mutableMapOf<String, MutableStateFlow<List<Message>>>()
@@ -58,9 +60,8 @@ class MessageRepository(
                 )
             )
 
-            // Add to cache
-            val flow = messagesCache.getOrPut(chatId) { MutableStateFlow(emptyList()) }
-            flow.value = listOf(message) + flow.value
+            // Add to cache (avoid duplicates - WebSocket may also deliver this message)
+            addMessage(chatId, message)
 
             Result.success(message)
         } catch (e: ApiException) {
@@ -107,6 +108,23 @@ class MessageRepository(
 
     fun clearCache(chatId: String) {
         messagesCache.remove(chatId)
+    }
+
+    fun sendTypingIndicator(chatId: String) {
+        // Prefer WebSocket for typing
+        webSocketManager?.sendTyping(chatId)
+    }
+
+    fun sendStopTyping(chatId: String) {
+        webSocketManager?.sendStopTyping(chatId)
+    }
+
+    fun subscribeToChat(chatId: String) {
+        webSocketManager?.subscribe(listOf(chatId))
+    }
+
+    fun unsubscribeFromChat(chatId: String) {
+        webSocketManager?.unsubscribe(listOf(chatId))
     }
 
     suspend fun sendVideoBubble(
@@ -158,9 +176,8 @@ class MessageRepository(
 
             onProgress(1.0f)
 
-            // Add to cache
-            val flow = messagesCache.getOrPut(chatId) { MutableStateFlow(emptyList()) }
-            flow.value = listOf(message) + flow.value
+            // Add to cache (avoid duplicates - WebSocket may also deliver this message)
+            addMessage(chatId, message)
 
             Result.success(message)
         } catch (e: ApiException) {

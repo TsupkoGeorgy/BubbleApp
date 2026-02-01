@@ -3,6 +3,10 @@ package org.example.bubbleapp.ui.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -28,6 +32,11 @@ fun ChatsListScreen(
     val state by viewModel.state.collectAsState()
     val dialogState by viewModel.dialogState.collectAsState()
 
+    // Load chats when screen is shown
+    LaunchedEffect(Unit) {
+        viewModel.loadChats()
+    }
+
     // Подписка на one-time события
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -41,6 +50,8 @@ fun ChatsListScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF1a1a2e))
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
         Column(
             modifier = Modifier.fillMaxSize()

@@ -7,7 +7,10 @@ import kotlinx.serialization.Serializable
 data class SendCodeRequest(val phone: String)
 
 @Serializable
-data class SendCodeResponse(val message: String)
+data class SendCodeResponse(
+    val success: Boolean = true,
+    val message: String
+)
 
 @Serializable
 data class VerifyCodeRequest(
@@ -132,6 +135,6 @@ data class UsersSearchResponse(
 @Serializable
 data class MessagesResponse(
     val messages: List<org.example.bubbleapp.data.model.Message>,
-    val total: Int,
+    val total: Long,
     val hasMore: Boolean
 )

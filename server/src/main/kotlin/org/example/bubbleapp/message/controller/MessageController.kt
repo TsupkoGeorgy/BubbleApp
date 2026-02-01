@@ -71,4 +71,15 @@ class MessageController(
         messageService.deleteMessage(messageId, user.userId)
         return ResponseEntity.noContent().build()
     }
+
+    @PostMapping("/chats/{chatId}/read")
+    @Operation(summary = "Mark messages as read")
+    fun markAsRead(
+        @AuthenticationPrincipal user: UserPrincipal,
+        @PathVariable chatId: UUID,
+        @RequestParam untilMessageId: UUID
+    ): ResponseEntity<Void> {
+        messageService.markAsRead(chatId, user.userId, untilMessageId)
+        return ResponseEntity.ok().build()
+    }
 }

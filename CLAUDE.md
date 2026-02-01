@@ -100,9 +100,22 @@ Modifier.size(100.dp).clip(CircleShape).clickable { }
 open iosApp/iosApp.xcodeproj
 ```
 
+## Известные проблемы / TODO
+
+### UI/UX
+- [x] **Safe Area (iOS)**: ~~Верхние элементы UI залезают на status bar~~ — ИСПРАВЛЕНО
+  - Добавлены `windowInsetsPadding(WindowInsets.statusBars)` и `windowInsetsPadding(WindowInsets.navigationBars)` во все экраны
+
+- [x] **Keyboard Insets**: ~~При открытии клавиатуры элементы UI остаются под ней~~ — ИСПРАВЛЕНО
+  - Добавлен `windowInsetsPadding(WindowInsets.ime)` в экраны с полями ввода (ChatScreen, auth screens, CallsScreen)
+
+### Конфигурация
+- При тестировании на реальном устройстве нужно менять `DEFAULT_BASE_URL` в `AppState.kt` на IP компьютера в локальной сети
+
 ## Документация
 - [Kotlin/Native iOS interop](https://kotlinlang.org/docs/native-objc-interop.html)
 - [Compose Multiplatform iOS](https://www.jetbrains.com/help/kotlin-multiplatform-dev/compose-multiplatform-getting-started.html)
 - [UIKitViewController](https://developer.android.com/reference/kotlin/androidx/compose/ui/interop/package-summary)
 - [AVFoundation](https://developer.apple.com/documentation/avfoundation)
 - [expect/actual](https://kotlinlang.org/docs/multiplatform-expect-actual.html)
+- [WindowInsets в Compose](https://developer.android.com/develop/ui/compose/layouts/insets)

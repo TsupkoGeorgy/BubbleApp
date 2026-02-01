@@ -186,6 +186,12 @@ class ApiClient(
         }.checkError()
     }
 
+    suspend fun sendTypingIndicator(chatId: String) {
+        client.post("$baseUrl/chats/$chatId/typing") {
+            auth()
+        }.checkError()
+    }
+
     // ===== ATTACHMENT =====
 
     suspend fun getUploadUrl(request: UploadUrlRequest): UploadUrlResponse {

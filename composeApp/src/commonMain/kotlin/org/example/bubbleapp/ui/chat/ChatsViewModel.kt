@@ -12,6 +12,10 @@ import org.example.bubbleapp.data.model.Chat
 import org.example.bubbleapp.data.model.User
 import org.example.bubbleapp.data.repository.ChatRepository
 import org.example.bubbleapp.data.repository.UserRepository
+import org.example.bubbleapp.data.websocket.ChatWebSocketManager
+import org.example.bubbleapp.data.websocket.ChatWsEvent
+import org.example.bubbleapp.data.websocket.NewChatEvent
+import org.example.bubbleapp.data.websocket.NewMessageEvent
 
 data class ChatsListState(
     val chats: List<Chat> = emptyList(),
@@ -36,7 +40,8 @@ sealed class ChatsEvent {
 class ChatsViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val webSocketManager: ChatWebSocketManager? = null
 ) {
     private val _state = MutableStateFlow(ChatsListState())
     val state: StateFlow<ChatsListState> = _state
@@ -48,7 +53,32 @@ class ChatsViewModel(
     val events: SharedFlow<ChatsEvent> = _events.asSharedFlow()
 
     init {
-        loadChats()
+        // Don't load chats here - tokens might not be ready yet
+        // ChatsListScreen will call loadChats() when shown
+        observeWebSocketEvents()
+    }
+
+    private fun observeWebSocketEvents() {
+        webSocketManager?.let { ws ->
+            scope.launch {
+                ws.events.collect { event ->
+                    when (event) {
+                        is NewChatEvent -> {
+                            // New chat created by someone else - reload chats list
+                            loadChats()
+                        }
+                        is NewMessageEvent -> {
+                            // Check if we have this chat, if not - reload
+                            val currentChats = _state.value.chats
+                            if (currentChats.none { it.id == event.chatId }) {
+                                loadChats()
+                            }
+                        }
+                        else -> { /* Ignore other events */ }
+                    }
+                }
+            }
+        }
     }
 
     // ===== Chats List =====

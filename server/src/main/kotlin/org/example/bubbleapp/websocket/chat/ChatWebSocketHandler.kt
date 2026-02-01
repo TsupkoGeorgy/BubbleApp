@@ -138,6 +138,22 @@ class ChatWebSocketHandler(
         broadcastToChat(chatId, ChatWsMessage.MessageDeleted(chatId = chatId, messageId = messageId))
     }
 
+    fun broadcastNewChat(chatId: UUID, chatName: String?, chatType: String, createdBy: UUID, memberIds: List<UUID>) {
+        // Send to all members of the new chat (except creator who already knows)
+        memberIds.forEach { memberId ->
+            if (memberId != createdBy) {
+                userSessions[memberId]?.let { session ->
+                    sendToSession(session, ChatWsMessage.NewChat(
+                        chatId = chatId,
+                        chatName = chatName,
+                        chatType = chatType,
+                        createdBy = createdBy
+                    ))
+                }
+            }
+        }
+    }
+
     fun isUserOnline(userId: UUID): Boolean {
         return userSessions.containsKey(userId)
     }
@@ -146,14 +162,21 @@ class ChatWebSocketHandler(
         return userSessions.keys.toSet()
     }
 
-    // Private helpers
+    // Broadcast helpers
 
-    private fun broadcastToChat(chatId: UUID, message: ChatWsMessage, excludeUserId: UUID? = null) {
-        val subscribedUsers = chatSubscriptions[chatId] ?: return
+    fun broadcastToChat(chatId: UUID, message: ChatWsMessage, excludeUserId: UUID? = null) {
+        val subscribedUsers = chatSubscriptions[chatId]
+        log.info("Broadcasting to chat $chatId: ${message::class.simpleName}, subscribers: ${subscribedUsers?.size ?: 0}")
+
+        if (subscribedUsers == null || subscribedUsers.isEmpty()) {
+            log.warn("No subscribers for chat $chatId")
+            return
+        }
 
         subscribedUsers.forEach { userId ->
             if (userId != excludeUserId) {
                 userSessions[userId]?.let { session ->
+                    log.debug("Sending to user $userId")
                     sendToSession(session, message)
                 }
             }

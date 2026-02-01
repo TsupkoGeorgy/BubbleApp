@@ -186,6 +186,26 @@ class MessageService(
             throw MessageAccessDeniedException("User is not a member of this chat")
         }
     }
+
+    fun markAsRead(chatId: UUID, userId: UUID, untilMessageId: UUID) {
+        findChatOrThrow(chatId)
+        validateMembership(chatId, userId)
+
+        // For now just log - in future could update read status in DB
+        log.info("User $userId marked messages as read in chat $chatId until $untilMessageId")
+
+        // Broadcast read receipt to other members
+        chatWebSocketHandler.broadcastToChat(
+            chatId,
+            org.example.bubbleapp.websocket.chat.ChatWsMessage.MessageRead(
+                chatId = chatId,
+                messageId = untilMessageId,
+                userId = userId,
+                readAt = java.time.Instant.now()
+            ),
+            excludeUserId = userId
+        )
+    }
 }
 
 class MessageValidationException(message: String) : RuntimeException(message)

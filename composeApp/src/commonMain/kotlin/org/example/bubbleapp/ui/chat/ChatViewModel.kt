@@ -8,10 +8,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.example.bubbleapp.data.auth.currentTimeMillis
 import org.example.bubbleapp.data.model.Chat
 import org.example.bubbleapp.data.model.Message
 import org.example.bubbleapp.data.repository.ChatRepository
 import org.example.bubbleapp.data.repository.MessageRepository
+import org.example.bubbleapp.data.websocket.ChatWebSocketManager
+import org.example.bubbleapp.data.websocket.ChatWsEvent
+import org.example.bubbleapp.data.websocket.MessageDeletedEvent
+import org.example.bubbleapp.data.websocket.MessageEditedEvent
+import org.example.bubbleapp.data.websocket.MessageReadEvent
+import org.example.bubbleapp.data.websocket.NewChatEvent
+import org.example.bubbleapp.data.websocket.NewMessageEvent
+import org.example.bubbleapp.data.websocket.StopTypingEvent
+import org.example.bubbleapp.data.websocket.TypingEvent
+import org.example.bubbleapp.data.websocket.UserOfflineEvent
+import org.example.bubbleapp.data.websocket.UserOnlineEvent
+import org.example.bubbleapp.data.websocket.WsErrorEvent
 
 data class ChatState(
     val chat: Chat? = null,
@@ -25,7 +38,13 @@ data class ChatState(
     // Video bubble recording
     val isRecording: Boolean = false,
     val isUploading: Boolean = false,
-    val uploadProgress: Float = 0f
+    val uploadProgress: Float = 0f,
+    // Typing indicator
+    val isTyping: Boolean = false,
+    val typingUserName: String? = null,
+    // Online status (for direct chats)
+    val isOnline: Boolean = false,
+    val lastSeen: String? = null
 )
 
 sealed class ChatEvent {
@@ -39,7 +58,8 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
     private val currentUserId: String,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val webSocketManager: ChatWebSocketManager? = null
 ) {
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state
@@ -47,10 +67,93 @@ class ChatViewModel(
     private val _events = MutableSharedFlow<ChatEvent>()
     val events: SharedFlow<ChatEvent> = _events.asSharedFlow()
 
+    private var typingJob: kotlinx.coroutines.Job? = null
+
     init {
         loadChat()
         loadMessages()
         observeMessages()
+        subscribeToWebSocket()
+    }
+
+    private fun subscribeToWebSocket() {
+        // Subscribe to this chat
+        messageRepository.subscribeToChat(chatId)
+
+        // Listen for WebSocket events
+        webSocketManager?.let { ws ->
+            scope.launch {
+                ws.events.collect { event ->
+                    handleWebSocketEvent(event)
+                }
+            }
+        }
+    }
+
+    private fun handleWebSocketEvent(event: ChatWsEvent) {
+        when (event) {
+            is NewMessageEvent -> {
+                if (event.chatId == chatId) {
+                    messageRepository.addMessage(chatId, event.message)
+                }
+            }
+            is TypingEvent -> {
+                if (event.chatId == chatId && event.userId != currentUserId) {
+                    onTypingReceived(event.username)
+                }
+            }
+            is StopTypingEvent -> {
+                if (event.chatId == chatId && event.userId != currentUserId) {
+                    _state.update { it.copy(isTyping = false, typingUserName = null) }
+                }
+            }
+            is UserOnlineEvent -> {
+                // Check if this user is the chat partner
+                val chat = _state.value.chat
+                if (chat?.type == "PRIVATE") {
+                    val partner = chat.members.find { it.userId != currentUserId }
+                    if (partner?.userId == event.userId) {
+                        onUserOnlineChanged(true, null)
+                    }
+                }
+            }
+            is UserOfflineEvent -> {
+                val chat = _state.value.chat
+                if (chat?.type == "PRIVATE") {
+                    val partner = chat.members.find { it.userId != currentUserId }
+                    if (partner?.userId == event.userId) {
+                        onUserOnlineChanged(false, null)
+                    }
+                }
+            }
+            is MessageDeletedEvent -> {
+                if (event.chatId == chatId) {
+                    messageRepository.clearCache(chatId)
+                    loadMessages()
+                }
+            }
+            is MessageEditedEvent -> {
+                if (event.chatId == chatId) {
+                    // Reload messages to get updated content
+                    loadMessages()
+                }
+            }
+            is MessageReadEvent -> {
+                // Update message status if needed
+            }
+            is WsErrorEvent -> {
+                scope.launch {
+                    _events.emit(ChatEvent.Error(event.message))
+                }
+            }
+            is NewChatEvent -> {
+                // Not relevant for individual chat view
+            }
+        }
+    }
+
+    fun onCleared() {
+        messageRepository.unsubscribeFromChat(chatId)
     }
 
     private fun observeMessages() {
@@ -127,6 +230,36 @@ class ChatViewModel(
 
     fun onMessageTextChanged(text: String) {
         _state.update { it.copy(messageText = text) }
+        // Send typing indicator when user starts typing
+        if (text.isNotEmpty()) {
+            sendTypingIndicator()
+        }
+    }
+
+    private var lastTypingSentTime = 0L
+
+    private fun sendTypingIndicator() {
+        val now = currentTimeMillis()
+        // Send typing at most once every 3 seconds
+        if (now - lastTypingSentTime > 3000) {
+            lastTypingSentTime = now
+            messageRepository.sendTypingIndicator(chatId)
+        }
+    }
+
+    fun onTypingReceived(userName: String?) {
+        _state.update { it.copy(isTyping = true, typingUserName = userName) }
+        // Cancel previous typing timeout
+        typingJob?.cancel()
+        // Clear typing after 4 seconds
+        typingJob = scope.launch {
+            kotlinx.coroutines.delay(4000)
+            _state.update { it.copy(isTyping = false, typingUserName = null) }
+        }
+    }
+
+    fun onUserOnlineChanged(isOnline: Boolean, lastSeen: String?) {
+        _state.update { it.copy(isOnline = isOnline, lastSeen = lastSeen) }
     }
 
     fun sendMessage() {
@@ -163,7 +296,7 @@ class ChatViewModel(
     }
 
     fun isOwnMessage(message: Message): Boolean {
-        return message.senderId == currentUserId
+        return message.effectiveSenderId == currentUserId
     }
 
     fun markAsRead() {
