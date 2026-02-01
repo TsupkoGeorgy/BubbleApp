@@ -11,6 +11,7 @@ import org.example.bubbleapp.data.auth.AuthState
 import org.example.bubbleapp.data.auth.TokenManager
 import org.example.bubbleapp.data.auth.TokenStorage
 import org.example.bubbleapp.data.repository.ChatRepository
+import org.example.bubbleapp.data.repository.MessageRepository
 import org.example.bubbleapp.data.repository.UserRepository
 import org.example.bubbleapp.ui.auth.AuthViewModel
 import org.example.bubbleapp.ui.chat.ChatsViewModel
@@ -33,6 +34,7 @@ class AppState(
     // Repositories
     val chatRepository = ChatRepository(apiClient)
     val userRepository = UserRepository(apiClient)
+    val messageRepository = MessageRepository(apiClient)
 
     // Services
     val authService = AuthService(apiClient, tokenManager)

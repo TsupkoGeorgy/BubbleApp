@@ -56,21 +56,24 @@ import org.example.bubbleapp.data.auth.AuthState
 import org.example.bubbleapp.ui.auth.PhoneInputScreen
 import org.example.bubbleapp.ui.auth.CodeVerifyScreen
 import org.example.bubbleapp.ui.auth.ProfileSetupScreen
+import org.example.bubbleapp.ui.chat.ChatScreen
+import org.example.bubbleapp.ui.chat.ChatViewModel
 import org.example.bubbleapp.ui.chat.ChatsListScreen
 import kotlin.math.PI
 import kotlin.math.atan2
 
 // Навигация
-enum class Screen {
+sealed class Screen {
     // Auth
-    PhoneInput,
-    CodeVerify,
-    ProfileSetup,
+    object PhoneInput : Screen()
+    object CodeVerify : Screen()
+    object ProfileSetup : Screen()
     // Main
-    Home,
-    Bubbles,
-    Calls,
-    Chats
+    object Home : Screen()
+    object Bubbles : Screen()
+    object Calls : Screen()
+    object Chats : Screen()
+    data class Chat(val chatId: String) : Screen()
 }
 
 // Состояние транскрипции
@@ -132,13 +135,8 @@ fun App() {
         AnimatedContent(
             targetState = currentScreen,
             transitionSpec = {
-                if (targetState.ordinal < initialState.ordinal) {
-                    (slideInHorizontally { -it } + fadeIn()) togetherWith
-                            (slideOutHorizontally { it } + fadeOut())
-                } else {
-                    (slideInHorizontally { it } + fadeIn()) togetherWith
-                            (slideOutHorizontally { -it } + fadeOut())
-                }
+                (slideInHorizontally { it } + fadeIn()) togetherWith
+                        (slideOutHorizontally { -it } + fadeOut())
             }
         ) { screen ->
             when (screen) {
@@ -186,9 +184,26 @@ fun App() {
                     viewModel = appState.chatsViewModel,
                     onBack = { currentScreen = Screen.Home },
                     onChatClick = { chat ->
-                        // TODO: Navigate to ChatScreen when implemented
+                        currentScreen = Screen.Chat(chat.id)
                     }
                 )
+
+                is Screen.Chat -> {
+                    val currentUserId = appState.tokenManager.getUserId() ?: ""
+                    val chatViewModel = remember(screen.chatId) {
+                        ChatViewModel(
+                            chatId = screen.chatId,
+                            chatRepository = appState.chatRepository,
+                            messageRepository = appState.messageRepository,
+                            currentUserId = currentUserId,
+                            scope = scope
+                        )
+                    }
+                    ChatScreen(
+                        viewModel = chatViewModel,
+                        onBack = { currentScreen = Screen.Chats }
+                    )
+                }
             }
         }
     }

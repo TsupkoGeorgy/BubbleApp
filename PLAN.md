@@ -421,5 +421,59 @@ class ChatViewModel(private val sendMessage: SendMessageUseCase) {
 - Простой CRUD без логики (просто проксирует Repository)
 - Один источник данных, нет комбинирования
 
+### Р6. Правила обработки событий из ViewModel
+
+**StateFlow — для UI состояния:**
+```kotlin
+// Данные которые отрисовываются на экране
+private val _state = MutableStateFlow(ScreenState())
+val state: StateFlow<ScreenState> = _state.asStateFlow()
+```
+
+**SharedFlow — для one-time событий:**
+```kotlin
+// Навигация, тосты, ошибки — события которые должны произойти один раз
+private val _events = MutableSharedFlow<ScreenEvent>()
+val events: SharedFlow<ScreenEvent> = _events.asSharedFlow()
+
+// Emit в корутине
+scope.launch {
+    _events.emit(ScreenEvent.NavigateToChat(chatId))
+}
+```
+
+**В UI — подписка через LaunchedEffect(Unit):**
+```kotlin
+// ✅ Правильно: подписка один раз при старте экрана
+LaunchedEffect(Unit) {
+    viewModel.events.collect { event ->
+        when (event) {
+            is ScreenEvent.NavigateToChat -> onNavigate(event.chatId)
+            is ScreenEvent.ShowError -> showToast(event.message)
+        }
+    }
+}
+```
+
+**❌ Антипаттерн — НЕ использовать:**
+```kotlin
+// Плохо: StateFlow для событий + clearEvent()
+private val _events = MutableStateFlow<Event?>(null)
+
+fun clearEvent() { _events.value = null }  // ❌ Race conditions
+
+// Плохо: LaunchedEffect с event как key
+LaunchedEffect(events) {  // ❌ Срабатывает на каждое изменение
+    events?.let { handle(it) }
+    viewModel.clearEvent()
+}
+```
+
+**Почему SharedFlow:**
+- Не хранит значение (не повторится при recompose)
+- Нет race conditions
+- Идиоматично для Kotlin Flow
+- События гарантированно доставляются подписчикам
+
 ## Приоритет
 Рефакторинг можно делать постепенно при добавлении новых фич, не переписывая всё сразу.
