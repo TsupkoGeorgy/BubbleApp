@@ -21,12 +21,17 @@ data class ChatState(
     val isLoadingMore: Boolean = false,
     val hasMoreMessages: Boolean = true,
     val errorMessage: String? = null,
-    val messageText: String = ""
+    val messageText: String = "",
+    // Video bubble recording
+    val isRecording: Boolean = false,
+    val isUploading: Boolean = false,
+    val uploadProgress: Float = 0f
 )
 
 sealed class ChatEvent {
     data class Error(val message: String) : ChatEvent()
     object MessageSent : ChatEvent()
+    object VideoBubbleSent : ChatEvent()
 }
 
 class ChatViewModel(
@@ -165,6 +170,42 @@ class ChatViewModel(
         val lastMessage = _state.value.messages.firstOrNull() ?: return
         scope.launch {
             messageRepository.markAsRead(chatId, lastMessage.id)
+        }
+    }
+
+    // ===== Video Bubble =====
+
+    fun startRecording() {
+        _state.update { it.copy(isRecording = true) }
+    }
+
+    fun cancelRecording() {
+        _state.update { it.copy(isRecording = false) }
+    }
+
+    fun onVideoRecorded(fileName: String, filePath: String, fileSize: Long) {
+        _state.update { it.copy(isRecording = false, isUploading = true, uploadProgress = 0f) }
+
+        scope.launch {
+            messageRepository.sendVideoBubble(
+                chatId = chatId,
+                localFileName = fileName,
+                localFilePath = filePath,
+                fileSize = fileSize,
+                durationMs = null, // TODO: Get duration from video
+                onProgress = { progress ->
+                    _state.update { it.copy(uploadProgress = progress) }
+                }
+            ).fold(
+                onSuccess = {
+                    _state.update { it.copy(isUploading = false) }
+                    _events.emit(ChatEvent.VideoBubbleSent)
+                },
+                onFailure = { e ->
+                    _state.update { it.copy(isUploading = false) }
+                    _events.emit(ChatEvent.Error(e.message ?: "Ошибка отправки видео"))
+                }
+            )
         }
     }
 }

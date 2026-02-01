@@ -37,12 +37,13 @@ data class Message(
 data class Attachment(
     val id: String,
     val type: String, // "VIDEO", "IMAGE", "VOICE", "FILE"
-    val url: String,
+    val fileName: String,
+    val fileSize: Long,
+    val mimeType: String,
+    val downloadUrl: String? = null,
     val thumbnailUrl: String? = null,
-    val fileName: String? = null,
-    val mimeType: String? = null,
-    val size: Long? = null,
-    val duration: Int? = null, // seconds for video/voice
     val width: Int? = null,
-    val height: Int? = null
+    val height: Int? = null,
+    val durationMs: Int? = null,
+    val createdAt: String? = null
 )

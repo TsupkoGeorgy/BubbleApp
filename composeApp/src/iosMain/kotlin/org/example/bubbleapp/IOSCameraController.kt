@@ -60,7 +60,7 @@ class IOSCameraController(
 
     private val audioDataOutput = AVCaptureAudioDataOutput()
 
-    override var onVideoRecorded: ((fileName: String, fileSize: Long) -> Unit)? = null
+    override var onVideoRecorded: ((fileName: String, filePath: String, fileSize: Long) -> Unit)? = null
     override var onCameraReady: (() -> Unit)? = null
 
     // Delegates
@@ -286,8 +286,8 @@ class IOSCameraController(
                     val fileName = path.substringAfterLast("/")
                     val fileSize = fileSystemManager.getFileSize(url)
 
-                    println("IOSCameraController: Recording saved - $fileName ($fileSize bytes)")
-                    onVideoRecorded?.invoke(fileName, fileSize)
+                    println("IOSCameraController: Recording saved - $fileName at $path ($fileSize bytes)")
+                    onVideoRecorded?.invoke(fileName, path, fileSize)
                 } else {
                     println("IOSCameraController: Recording failed - $error")
                 }

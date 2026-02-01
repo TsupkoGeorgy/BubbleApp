@@ -151,11 +151,12 @@ class ApiClient(
     // ===== MESSAGE =====
 
     suspend fun getMessages(chatId: String, before: String? = null, limit: Int = 50): List<Message> {
-        return client.get("$baseUrl/chats/$chatId/messages") {
+        val response: MessagesResponse = client.get("$baseUrl/chats/$chatId/messages") {
             auth()
             before?.let { parameter("before", it) }
             parameter("limit", limit)
         }.checkError().body()
+        return response.messages
     }
 
     suspend fun sendMessage(chatId: String, request: SendMessageRequest): Message {
@@ -194,8 +195,8 @@ class ApiClient(
         }.checkError().body()
     }
 
-    suspend fun confirmUpload(attachmentId: String, request: ConfirmUploadRequest): Attachment {
-        return client.post("$baseUrl/attachments/$attachmentId/confirm") {
+    suspend fun confirmUpload(request: ConfirmUploadRequest): Attachment {
+        return client.post("$baseUrl/attachments/confirm") {
             auth()
             setBody(request)
         }.checkError().body()

@@ -18,7 +18,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.example.bubbleapp.CameraController
+import org.example.bubbleapp.CameraPreview
+import org.example.bubbleapp.VideoPreviewPlayer
 import org.example.bubbleapp.data.model.Message
+import org.example.bubbleapp.rememberCameraController
 
 @Composable
 fun ChatScreen(
@@ -27,12 +31,23 @@ fun ChatScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
+    val cameraController = rememberCameraController()
+
+    // Setup camera callbacks
+    LaunchedEffect(cameraController) {
+        cameraController.onCameraReady = {
+            cameraController.startRecording()
+        }
+        cameraController.onVideoRecorded = { fileName, filePath, fileSize ->
+            viewModel.onVideoRecorded(fileName, filePath, fileSize)
+        }
+    }
 
     // Подписка на события
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                is ChatEvent.MessageSent -> {
+                is ChatEvent.MessageSent, is ChatEvent.VideoBubbleSent -> {
                     // Scroll to bottom on new message
                     if (state.messages.isNotEmpty()) {
                         listState.animateScrollToItem(0)
@@ -167,8 +182,42 @@ fun ChatScreen(
             text = state.messageText,
             onTextChange = { viewModel.onMessageTextChanged(it) },
             onSend = { viewModel.sendMessage() },
-            isSending = state.isSending
+            onRecordBubble = { viewModel.startRecording() },
+            isSending = state.isSending,
+            isUploading = state.isUploading
         )
+
+        // Recording overlay
+        if (state.isRecording) {
+            RecordingOverlay(
+                cameraController = cameraController,
+                onCancel = {
+                    cameraController.stopRecording()
+                    viewModel.cancelRecording()
+                },
+                onStop = { cameraController.stopRecording() }
+            )
+        }
+
+        // Uploading indicator
+        if (state.isUploading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color.White)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Отправка...",
+                        color = Color.White,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -276,12 +325,7 @@ private fun MessageBubble(
                     )
                 }
                 "VIDEO_BUBBLE" -> {
-                    // TODO: Video bubble component
-                    Text(
-                        text = "[Видео-кружок]",
-                        fontSize = 15.sp,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
+                    VideoBubbleContent(message = message)
                 }
                 "VOICE" -> {
                     Text(
@@ -316,7 +360,9 @@ private fun MessageInput(
     text: String,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
-    isSending: Boolean
+    onRecordBubble: () -> Unit,
+    isSending: Boolean,
+    isUploading: Boolean
 ) {
     Row(
         modifier = Modifier
@@ -325,7 +371,23 @@ private fun MessageInput(
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // TODO: Attachment button
+        // Record bubble button
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF00C9A7))
+                .clickable(enabled = !isSending && !isUploading) { onRecordBubble() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "●",
+                fontSize = 24.sp,
+                color = Color.White
+            )
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
 
         OutlinedTextField(
             value = text,
@@ -333,7 +395,7 @@ private fun MessageInput(
             placeholder = { Text("Сообщение...", color = Color.Gray) },
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 4.dp),
             shape = RoundedCornerShape(24.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = Color.White,
@@ -346,6 +408,8 @@ private fun MessageInput(
             ),
             maxLines = 4
         )
+
+        Spacer(modifier = Modifier.width(4.dp))
 
         // Send button
         Box(
@@ -372,6 +436,164 @@ private fun MessageInput(
                     text = "→",
                     fontSize = 20.sp,
                     color = Color.White
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordingOverlay(
+    cameraController: CameraController,
+    onCancel: () -> Unit,
+    onStop: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.9f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Camera preview in circle
+            Box(
+                modifier = Modifier
+                    .size(280.dp)
+                    .clip(CircleShape)
+            ) {
+                CameraPreview(
+                    modifier = Modifier.fillMaxSize(),
+                    cameraController = cameraController,
+                    onPreviewReady = {
+                        cameraController.startCamera()
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Control buttons
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(48.dp)
+            ) {
+                // Cancel button
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(Color.Gray)
+                        .clickable { onCancel() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "✕",
+                        fontSize = 28.sp,
+                        color = Color.White
+                    )
+                }
+
+                // Stop/Send button
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF4444))
+                        .clickable { onStop() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "■",
+                        fontSize = 28.sp,
+                        color = Color.White
+                    )
+                }
+
+                // Switch camera
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF6C63FF))
+                        .clickable { cameraController.switchCamera() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "↻",
+                        fontSize = 28.sp,
+                        color = Color.White
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Записываем кружок...",
+                color = Color.White,
+                fontSize = 16.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoBubbleContent(message: Message) {
+    var isPlaying by remember { mutableStateOf(false) }
+
+    // Get video URL from attachment or content
+    val videoSource = message.attachments.firstOrNull()?.downloadUrl
+        ?: message.content // Fallback to local filename
+
+    Box(
+        modifier = Modifier
+            .size(150.dp)
+            .clip(CircleShape)
+            .clickable { isPlaying = !isPlaying },
+        contentAlignment = Alignment.Center
+    ) {
+        if (videoSource != null) {
+            VideoPreviewPlayer(
+                fileName = videoSource,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Play icon overlay when not playing
+            if (!isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.9f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "▶",
+                            fontSize = 20.sp,
+                            color = Color(0xFF6C63FF)
+                        )
+                    }
+                }
+            }
+        } else {
+            // Placeholder if no video
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Gray),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "●",
+                    fontSize = 48.sp,
+                    color = Color.White.copy(alpha = 0.5f)
                 )
             }
         }

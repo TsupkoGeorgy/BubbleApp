@@ -1000,7 +1000,7 @@ fun BubblesScreen(
             cameraController.startRecording()
         }
 
-        cameraController.onVideoRecorded = { _, _ ->
+        cameraController.onVideoRecorded = { _, _, _ ->
             recordedVideos = cameraController.getRecordedVideos()
         }
     }
@@ -1378,7 +1378,7 @@ interface CameraController {
     fun getRecordedVideos(): List<String>
     fun createPreviewController(): Any
 
-    var onVideoRecorded: ((fileName: String, fileSize: Long) -> Unit)?
+    var onVideoRecorded: ((fileName: String, filePath: String, fileSize: Long) -> Unit)?
     var onCameraReady: (() -> Unit)?
 }
 

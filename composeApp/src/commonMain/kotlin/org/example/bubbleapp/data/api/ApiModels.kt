@@ -68,23 +68,32 @@ data class EditMessageRequest(val content: String)
 // Attachment
 @Serializable
 data class UploadUrlRequest(
+    val type: String, // "VIDEO", "IMAGE", "VOICE", "FILE"
     val fileName: String,
-    val contentType: String,
-    val size: Long,
-    val type: String // "VIDEO", "IMAGE", "VOICE", "FILE"
+    val mimeType: String,
+    val fileSize: Long,
+    val width: Int? = null,
+    val height: Int? = null,
+    val durationMs: Int? = null
 )
 
 @Serializable
 data class UploadUrlResponse(
     val uploadUrl: String,
-    val attachmentId: String
+    val key: String,
+    val expiresIn: Int = 900
 )
 
 @Serializable
 data class ConfirmUploadRequest(
-    val duration: Int? = null,
+    val key: String,
+    val type: String,
+    val fileName: String,
+    val fileSize: Long,
+    val mimeType: String,
     val width: Int? = null,
-    val height: Int? = null
+    val height: Int? = null,
+    val durationMs: Int? = null
 )
 
 // Error
@@ -117,4 +126,12 @@ data class ChatsResponse(
 data class UsersSearchResponse(
     val users: List<org.example.bubbleapp.data.model.User>,
     val total: Int
+)
+
+// Messages response
+@Serializable
+data class MessagesResponse(
+    val messages: List<org.example.bubbleapp.data.model.Message>,
+    val total: Int,
+    val hasMore: Boolean
 )

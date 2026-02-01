@@ -10,6 +10,7 @@ import org.example.bubbleapp.data.auth.AuthService
 import org.example.bubbleapp.data.auth.AuthState
 import org.example.bubbleapp.data.auth.TokenManager
 import org.example.bubbleapp.data.auth.TokenStorage
+import org.example.bubbleapp.data.repository.AttachmentRepository
 import org.example.bubbleapp.data.repository.ChatRepository
 import org.example.bubbleapp.data.repository.MessageRepository
 import org.example.bubbleapp.data.repository.UserRepository
@@ -34,7 +35,8 @@ class AppState(
     // Repositories
     val chatRepository = ChatRepository(apiClient)
     val userRepository = UserRepository(apiClient)
-    val messageRepository = MessageRepository(apiClient)
+    val attachmentRepository = AttachmentRepository(apiClient)
+    val messageRepository = MessageRepository(apiClient, attachmentRepository)
 
     // Services
     val authService = AuthService(apiClient, tokenManager)
