@@ -1,5 +1,6 @@
 package org.example.bubbleapp.attachment.service
 
+import org.example.bubbleapp.attachment.exception.InvalidFileException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -104,5 +105,3 @@ class S3StorageService(
         }
     }
 }
-
-class InvalidFileException(message: String) : RuntimeException(message)

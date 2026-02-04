@@ -3,7 +3,7 @@ package org.example.bubbleapp.auth.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import org.example.bubbleapp.auth.dto.*
+import org.example.bubbleapp.auth.dto.models.*
 import org.example.bubbleapp.auth.service.AuthService
 import org.example.bubbleapp.security.UserPrincipal
 import org.springframework.http.ResponseEntity

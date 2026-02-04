@@ -1,6 +1,9 @@
 package org.example.bubbleapp.chat.service
 
-import org.example.bubbleapp.chat.dto.*
+import org.example.bubbleapp.chat.dto.models.*
+import org.example.bubbleapp.chat.exception.ChatAccessDeniedException
+import org.example.bubbleapp.chat.exception.ChatOperationException
+import org.example.bubbleapp.chat.mapper.toResponse
 import org.example.bubbleapp.chat.entity.Chat
 import org.example.bubbleapp.chat.entity.ChatMember
 import org.example.bubbleapp.chat.entity.ChatType
@@ -236,6 +239,3 @@ class ChatService(
             ?: throw ChatAccessDeniedException("User is not a member of this chat")
     }
 }
-
-class ChatOperationException(message: String) : RuntimeException(message)
-class ChatAccessDeniedException(message: String) : RuntimeException(message)

@@ -4,7 +4,10 @@ import org.example.bubbleapp.chat.entity.Chat
 import org.example.bubbleapp.chat.repository.ChatMemberRepository
 import org.example.bubbleapp.chat.repository.ChatRepository
 import org.example.bubbleapp.common.exception.EntityNotFoundException
-import org.example.bubbleapp.message.dto.*
+import org.example.bubbleapp.message.dto.models.*
+import org.example.bubbleapp.message.exception.MessageAccessDeniedException
+import org.example.bubbleapp.message.exception.MessageValidationException
+import org.example.bubbleapp.message.mapper.toResponse
 import org.example.bubbleapp.message.entity.Message
 import org.example.bubbleapp.message.entity.MessageType
 import org.example.bubbleapp.message.repository.MessageRepository
@@ -197,7 +200,7 @@ class MessageService(
         // Broadcast read receipt to other members
         chatWebSocketHandler.broadcastToChat(
             chatId,
-            org.example.bubbleapp.websocket.chat.ChatWsMessage.MessageRead(
+            org.example.bubbleapp.websocket.chat.models.ChatWsMessage.MessageRead(
                 chatId = chatId,
                 messageId = untilMessageId,
                 userId = userId,
@@ -207,6 +210,3 @@ class MessageService(
         )
     }
 }
-
-class MessageValidationException(message: String) : RuntimeException(message)
-class MessageAccessDeniedException(message: String) : RuntimeException(message)

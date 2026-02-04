@@ -3,7 +3,7 @@ package org.example.bubbleapp.notification
 import org.example.bubbleapp.device.entity.Device
 import org.example.bubbleapp.device.entity.Platform
 import org.example.bubbleapp.device.service.DeviceService
-import org.example.bubbleapp.message.dto.MessageResponse
+import org.example.bubbleapp.message.dto.models.MessageResponse
 import org.example.bubbleapp.websocket.chat.ChatWebSocketHandler
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value

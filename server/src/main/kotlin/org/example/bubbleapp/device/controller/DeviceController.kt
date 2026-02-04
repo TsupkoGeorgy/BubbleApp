@@ -3,7 +3,7 @@ package org.example.bubbleapp.device.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import org.example.bubbleapp.device.dto.*
+import org.example.bubbleapp.device.dto.models.*
 import org.example.bubbleapp.device.service.DeviceService
 import org.example.bubbleapp.security.UserPrincipal
 import org.springframework.http.HttpStatus

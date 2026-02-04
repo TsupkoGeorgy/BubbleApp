@@ -1,7 +1,8 @@
 package org.example.bubbleapp.device.service
 
 import org.example.bubbleapp.common.exception.EntityNotFoundException
-import org.example.bubbleapp.device.dto.*
+import org.example.bubbleapp.device.dto.models.*
+import org.example.bubbleapp.device.mapper.toResponse
 import org.example.bubbleapp.device.entity.Device
 import org.example.bubbleapp.device.repository.DeviceRepository
 import org.example.bubbleapp.user.repository.UserRepository

@@ -1,6 +1,8 @@
 package org.example.bubbleapp.auth.service
 
-import org.example.bubbleapp.auth.dto.*
+import org.example.bubbleapp.auth.dto.models.*
+import org.example.bubbleapp.auth.exception.InvalidCodeException
+import org.example.bubbleapp.auth.exception.InvalidTokenException
 import org.example.bubbleapp.auth.entity.RefreshToken
 import org.example.bubbleapp.auth.repository.RefreshTokenRepository
 import org.example.bubbleapp.security.JwtService
@@ -150,6 +152,3 @@ class AuthService(
         avatarUrl = avatarUrl
     )
 }
-
-class InvalidCodeException(message: String) : RuntimeException(message)
-class InvalidTokenException(message: String) : RuntimeException(message)

@@ -3,7 +3,7 @@ package org.example.bubbleapp.chat.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import org.example.bubbleapp.chat.dto.*
+import org.example.bubbleapp.chat.dto.models.*
 import org.example.bubbleapp.chat.service.ChatService
 import org.example.bubbleapp.security.UserPrincipal
 import org.springframework.http.HttpStatus

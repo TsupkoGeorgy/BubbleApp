@@ -1,9 +1,10 @@
 package org.example.bubbleapp.user.service
 
 import org.example.bubbleapp.common.exception.EntityNotFoundException
-import org.example.bubbleapp.user.dto.UpdateProfileRequest
-import org.example.bubbleapp.user.dto.UserResponse
-import org.example.bubbleapp.user.dto.toResponse
+import org.example.bubbleapp.user.dto.models.UpdateProfileRequest
+import org.example.bubbleapp.user.dto.models.UserResponse
+import org.example.bubbleapp.user.exception.UsernameAlreadyExistsException
+import org.example.bubbleapp.user.mapper.toResponse
 import org.example.bubbleapp.user.entity.User
 import org.example.bubbleapp.user.repository.UserRepository
 import org.slf4j.LoggerFactory
@@ -67,5 +68,3 @@ class UserService(
         }
     }
 }
-
-class UsernameAlreadyExistsException(message: String) : RuntimeException(message)

@@ -10,6 +10,9 @@ import org.springframework.web.socket.CloseStatus
 import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler
+import org.example.bubbleapp.websocket.chat.models.ChatWsAction
+import org.example.bubbleapp.websocket.chat.models.ChatWsMessage
+import org.example.bubbleapp.message.dto.models.MessageResponse
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -121,7 +124,7 @@ class ChatWebSocketHandler(
 
     // Public methods for MessageService to call
 
-    fun broadcastNewMessage(chatId: UUID, message: org.example.bubbleapp.message.dto.MessageResponse) {
+    fun broadcastNewMessage(chatId: UUID, message: MessageResponse) {
         broadcastToChat(chatId, ChatWsMessage.NewMessage(chatId = chatId, message = message))
     }
 

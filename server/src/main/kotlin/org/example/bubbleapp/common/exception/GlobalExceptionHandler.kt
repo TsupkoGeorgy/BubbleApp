@@ -1,14 +1,14 @@
 package org.example.bubbleapp.common.exception
 
 import jakarta.servlet.http.HttpServletRequest
-import org.example.bubbleapp.attachment.service.InvalidFileException
-import org.example.bubbleapp.auth.service.InvalidCodeException
-import org.example.bubbleapp.auth.service.InvalidTokenException
-import org.example.bubbleapp.chat.service.ChatAccessDeniedException
-import org.example.bubbleapp.chat.service.ChatOperationException
-import org.example.bubbleapp.message.service.MessageAccessDeniedException
-import org.example.bubbleapp.message.service.MessageValidationException
-import org.example.bubbleapp.user.service.UsernameAlreadyExistsException
+import org.example.bubbleapp.attachment.exception.InvalidFileException
+import org.example.bubbleapp.auth.exception.InvalidCodeException
+import org.example.bubbleapp.auth.exception.InvalidTokenException
+import org.example.bubbleapp.chat.exception.ChatAccessDeniedException
+import org.example.bubbleapp.chat.exception.ChatOperationException
+import org.example.bubbleapp.message.exception.MessageAccessDeniedException
+import org.example.bubbleapp.message.exception.MessageValidationException
+import org.example.bubbleapp.user.exception.UsernameAlreadyExistsException
 import org.example.bubbleapp.common.dto.ErrorResponse
 import org.example.bubbleapp.common.dto.ValidationErrorResponse
 import org.slf4j.LoggerFactory
@@ -262,5 +262,3 @@ class GlobalExceptionHandler {
             )
     }
 }
-
-class EntityNotFoundException(message: String) : RuntimeException(message)

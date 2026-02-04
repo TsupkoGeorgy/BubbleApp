@@ -1,7 +1,9 @@
 package org.example.bubbleapp.attachment.service
 
-import org.example.bubbleapp.attachment.dto.*
+import org.example.bubbleapp.attachment.dto.models.*
 import org.example.bubbleapp.attachment.entity.Attachment
+import org.example.bubbleapp.attachment.exception.InvalidFileException
+import org.example.bubbleapp.attachment.mapper.toResponse
 import org.example.bubbleapp.attachment.entity.AttachmentType
 import org.example.bubbleapp.attachment.repository.AttachmentRepository
 import org.example.bubbleapp.common.exception.EntityNotFoundException

@@ -5,9 +5,9 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.example.bubbleapp.attachment.service.S3StorageService
 import org.example.bubbleapp.security.UserPrincipal
-import org.example.bubbleapp.user.dto.UpdateProfileRequest
-import org.example.bubbleapp.user.dto.UserResponse
-import org.example.bubbleapp.user.dto.UserSearchResponse
+import org.example.bubbleapp.user.dto.models.UpdateProfileRequest
+import org.example.bubbleapp.user.dto.models.UserResponse
+import org.example.bubbleapp.user.dto.models.UserSearchResponse
 import org.example.bubbleapp.user.service.UserService
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
