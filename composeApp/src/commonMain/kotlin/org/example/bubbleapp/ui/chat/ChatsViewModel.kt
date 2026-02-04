@@ -10,12 +10,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.example.bubbleapp.data.model.Chat
 import org.example.bubbleapp.data.model.User
-import org.example.bubbleapp.data.repository.ChatRepository
-import org.example.bubbleapp.data.repository.UserRepository
 import org.example.bubbleapp.data.websocket.ChatWebSocketManager
-import org.example.bubbleapp.data.websocket.ChatWsEvent
 import org.example.bubbleapp.data.websocket.NewChatEvent
 import org.example.bubbleapp.data.websocket.NewMessageEvent
+import org.example.bubbleapp.domain.usecase.chat.CreateDirectChatUseCase
+import org.example.bubbleapp.domain.usecase.chat.GetChatsUseCase
+import org.example.bubbleapp.domain.usecase.user.SearchUsersByPhoneUseCase
 
 data class ChatsListState(
     val chats: List<Chat> = emptyList(),
@@ -38,8 +38,9 @@ sealed class ChatsEvent {
 }
 
 class ChatsViewModel(
-    private val chatRepository: ChatRepository,
-    private val userRepository: UserRepository,
+    private val getChatsUseCase: GetChatsUseCase,
+    private val createDirectChatUseCase: CreateDirectChatUseCase,
+    private val searchUsersByPhoneUseCase: SearchUsersByPhoneUseCase,
     private val scope: CoroutineScope,
     private val webSocketManager: ChatWebSocketManager? = null
 ) {
@@ -53,8 +54,6 @@ class ChatsViewModel(
     val events: SharedFlow<ChatsEvent> = _events.asSharedFlow()
 
     init {
-        // Don't load chats here - tokens might not be ready yet
-        // ChatsListScreen will call loadChats() when shown
         observeWebSocketEvents()
     }
 
@@ -64,38 +63,36 @@ class ChatsViewModel(
                 ws.events.collect { event ->
                     when (event) {
                         is NewChatEvent -> {
-                            // New chat created by someone else - reload chats list
                             loadChats()
                         }
                         is NewMessageEvent -> {
-                            // Check if we have this chat, if not - reload
                             val currentChats = _state.value.chats
                             if (currentChats.none { it.id == event.chatId }) {
                                 loadChats()
                             }
                         }
-                        else -> { /* Ignore other events */ }
+                        else -> {}
                     }
                 }
             }
         }
     }
 
-    // ===== Chats List =====
-
     fun loadChats() {
         _state.update { it.copy(isLoading = true, errorMessage = null) }
 
         scope.launch {
-            chatRepository.refreshChats().fold(
+            getChatsUseCase.execute().fold(
                 onSuccess = { chats ->
                     _state.update { it.copy(chats = chats, isLoading = false) }
                 },
                 onFailure = { e ->
-                    _state.update { it.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Ошибка загрузки"
-                    )}
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = e.message ?: "Ошибка загрузки"
+                        )
+                    }
                 }
             )
         }
@@ -105,22 +102,21 @@ class ChatsViewModel(
         _state.update { it.copy(isRefreshing = true) }
 
         scope.launch {
-            chatRepository.refreshChats().fold(
+            getChatsUseCase.execute().fold(
                 onSuccess = { chats ->
                     _state.update { it.copy(chats = chats, isRefreshing = false) }
                 },
                 onFailure = { e ->
-                    _state.update { it.copy(
-                        isRefreshing = false,
-                        errorMessage = e.message
-                    )}
+                    _state.update {
+                        it.copy(
+                            isRefreshing = false,
+                            errorMessage = e.message
+                        )
+                    }
                 }
             )
         }
     }
-
-
-    // ===== New Chat Dialog =====
 
     fun showNewChatDialog() {
         _dialogState.value = NewChatDialogState(isVisible = true)
@@ -141,18 +137,22 @@ class ChatsViewModel(
         _dialogState.update { it.copy(isSearching = true, errorMessage = null) }
 
         scope.launch {
-            userRepository.searchByPhone(query).fold(
+            searchUsersByPhoneUseCase.execute(query).fold(
                 onSuccess = { users ->
-                    _dialogState.update { it.copy(
-                        searchResults = users,
-                        isSearching = false
-                    )}
+                    _dialogState.update {
+                        it.copy(
+                            searchResults = users,
+                            isSearching = false
+                        )
+                    }
                 },
                 onFailure = { e ->
-                    _dialogState.update { it.copy(
-                        isSearching = false,
-                        errorMessage = e.message
-                    )}
+                    _dialogState.update {
+                        it.copy(
+                            isSearching = false,
+                            errorMessage = e.message
+                        )
+                    }
                 }
             )
         }
@@ -162,17 +162,19 @@ class ChatsViewModel(
         _dialogState.update { it.copy(isCreating = true, errorMessage = null) }
 
         scope.launch {
-            chatRepository.createDirectChat(user.id).fold(
+            createDirectChatUseCase.execute(user.id).fold(
                 onSuccess = { chat ->
                     _dialogState.value = NewChatDialogState(isVisible = false)
                     _events.emit(ChatsEvent.ChatCreated(chat))
                     loadChats()
                 },
                 onFailure = { e ->
-                    _dialogState.update { it.copy(
-                        isCreating = false,
-                        errorMessage = e.message
-                    )}
+                    _dialogState.update {
+                        it.copy(
+                            isCreating = false,
+                            errorMessage = e.message
+                        )
+                    }
                 }
             )
         }

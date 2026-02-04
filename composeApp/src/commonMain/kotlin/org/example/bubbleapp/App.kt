@@ -63,7 +63,6 @@ import org.example.bubbleapp.ui.auth.PhoneInputScreen
 import org.example.bubbleapp.ui.auth.CodeVerifyScreen
 import org.example.bubbleapp.ui.auth.ProfileSetupScreen
 import org.example.bubbleapp.ui.chat.ChatScreen
-import org.example.bubbleapp.ui.chat.ChatViewModel
 import org.example.bubbleapp.ui.chat.ChatsListScreen
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -105,7 +104,7 @@ fun App() {
     val scope = rememberCoroutineScope()
     val appState = remember { getAppState(scope) }
     val isInitialized by appState.isInitialized.collectAsState()
-    val authState by appState.authService.authState.collectAsState()
+    val authState by appState.authState.collectAsState()
 
     MaterialTheme {
         if (!isInitialized) {
@@ -172,7 +171,7 @@ fun App() {
                     onNavigateToChats = { currentScreen = Screen.Chats },
                     onLogout = {
                         scope.launch {
-                            appState.authService.logout()
+                            appState.logout()
                             currentScreen = Screen.PhoneInput
                         }
                     }
@@ -195,16 +194,8 @@ fun App() {
                 )
 
                 is Screen.Chat -> {
-                    val currentUserId = appState.tokenManager.getUserId() ?: ""
                     val chatViewModel = remember(screen.chatId) {
-                        ChatViewModel(
-                            chatId = screen.chatId,
-                            chatRepository = appState.chatRepository,
-                            messageRepository = appState.messageRepository,
-                            currentUserId = currentUserId,
-                            scope = scope,
-                            webSocketManager = appState.chatWebSocketManager
-                        )
+                        appState.createChatViewModel(screen.chatId)
                     }
                     ChatScreen(
                         viewModel = chatViewModel,

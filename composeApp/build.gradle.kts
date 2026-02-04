@@ -50,6 +50,9 @@ kotlin {
             implementation(libs.ktor.client.logging)
             implementation(libs.ktor.client.websockets)
             implementation(libs.ktor.serialization.kotlinx.json)
+
+            // Kodein DI
+            implementation(libs.kodein.di)
         }
 
         iosMain.dependencies {

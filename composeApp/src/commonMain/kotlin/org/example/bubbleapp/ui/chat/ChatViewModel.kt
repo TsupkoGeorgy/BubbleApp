@@ -1,6 +1,8 @@
 package org.example.bubbleapp.ui.chat
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -11,7 +13,6 @@ import kotlinx.coroutines.launch
 import org.example.bubbleapp.data.auth.currentTimeMillis
 import org.example.bubbleapp.data.model.Chat
 import org.example.bubbleapp.data.model.Message
-import org.example.bubbleapp.data.repository.ChatRepository
 import org.example.bubbleapp.data.repository.MessageRepository
 import org.example.bubbleapp.data.websocket.ChatWebSocketManager
 import org.example.bubbleapp.data.websocket.ChatWsEvent
@@ -25,6 +26,12 @@ import org.example.bubbleapp.data.websocket.TypingEvent
 import org.example.bubbleapp.data.websocket.UserOfflineEvent
 import org.example.bubbleapp.data.websocket.UserOnlineEvent
 import org.example.bubbleapp.data.websocket.WsErrorEvent
+import org.example.bubbleapp.domain.usecase.chat.GetChatUseCase
+import org.example.bubbleapp.domain.usecase.message.DeleteMessageUseCase
+import org.example.bubbleapp.domain.usecase.message.LoadMessagesUseCase
+import org.example.bubbleapp.domain.usecase.message.MarkAsReadUseCase
+import org.example.bubbleapp.domain.usecase.message.SendMessageUseCase
+import org.example.bubbleapp.domain.usecase.message.SendVideoBubbleUseCase
 
 data class ChatState(
     val chat: Chat? = null,
@@ -35,29 +42,31 @@ data class ChatState(
     val hasMoreMessages: Boolean = true,
     val errorMessage: String? = null,
     val messageText: String = "",
-    // Video bubble recording
     val isRecording: Boolean = false,
     val isUploading: Boolean = false,
     val uploadProgress: Float = 0f,
-    // Typing indicator
     val isTyping: Boolean = false,
     val typingUserName: String? = null,
-    // Online status (for direct chats)
     val isOnline: Boolean = false,
     val lastSeen: String? = null
 )
 
 sealed class ChatEvent {
     data class Error(val message: String) : ChatEvent()
-    object MessageSent : ChatEvent()
-    object VideoBubbleSent : ChatEvent()
+    data object MessageSent : ChatEvent()
+    data object VideoBubbleSent : ChatEvent()
 }
 
 class ChatViewModel(
     private val chatId: String,
-    private val chatRepository: ChatRepository,
-    private val messageRepository: MessageRepository,
     private val currentUserId: String,
+    private val getChatUseCase: GetChatUseCase,
+    private val loadMessagesUseCase: LoadMessagesUseCase,
+    private val sendMessageUseCase: SendMessageUseCase,
+    private val sendVideoBubbleUseCase: SendVideoBubbleUseCase,
+    private val deleteMessageUseCase: DeleteMessageUseCase,
+    private val markAsReadUseCase: MarkAsReadUseCase,
+    private val messageRepository: MessageRepository,
     private val scope: CoroutineScope,
     private val webSocketManager: ChatWebSocketManager? = null
 ) {
@@ -67,7 +76,7 @@ class ChatViewModel(
     private val _events = MutableSharedFlow<ChatEvent>()
     val events: SharedFlow<ChatEvent> = _events.asSharedFlow()
 
-    private var typingJob: kotlinx.coroutines.Job? = null
+    private var typingJob: Job? = null
 
     init {
         loadChat()
@@ -77,10 +86,8 @@ class ChatViewModel(
     }
 
     private fun subscribeToWebSocket() {
-        // Subscribe to this chat
         messageRepository.subscribeToChat(chatId)
 
-        // Listen for WebSocket events
         webSocketManager?.let { ws ->
             scope.launch {
                 ws.events.collect { event ->
@@ -108,7 +115,6 @@ class ChatViewModel(
                 }
             }
             is UserOnlineEvent -> {
-                // Check if this user is the chat partner
                 val chat = _state.value.chat
                 if (chat?.type == "PRIVATE") {
                     val partner = chat.members.find { it.userId != currentUserId }
@@ -134,21 +140,16 @@ class ChatViewModel(
             }
             is MessageEditedEvent -> {
                 if (event.chatId == chatId) {
-                    // Reload messages to get updated content
                     loadMessages()
                 }
             }
-            is MessageReadEvent -> {
-                // Update message status if needed
-            }
+            is MessageReadEvent -> {}
             is WsErrorEvent -> {
                 scope.launch {
                     _events.emit(ChatEvent.Error(event.message))
                 }
             }
-            is NewChatEvent -> {
-                // Not relevant for individual chat view
-            }
+            is NewChatEvent -> {}
         }
     }
 
@@ -166,7 +167,7 @@ class ChatViewModel(
 
     private fun loadChat() {
         scope.launch {
-            chatRepository.getChat(chatId).fold(
+            getChatUseCase.execute(chatId).fold(
                 onSuccess = { chat ->
                     _state.update { it.copy(chat = chat) }
                 },
@@ -181,7 +182,7 @@ class ChatViewModel(
         _state.update { it.copy(isLoading = true, errorMessage = null) }
 
         scope.launch {
-            messageRepository.loadMessages(chatId).fold(
+            loadMessagesUseCase.execute(chatId).fold(
                 onSuccess = { messages ->
                     _state.update {
                         it.copy(
@@ -211,7 +212,7 @@ class ChatViewModel(
         _state.update { it.copy(isLoadingMore = true) }
 
         scope.launch {
-            messageRepository.loadMessages(chatId, before = oldestMessage.id).fold(
+            loadMessagesUseCase.execute(chatId, before = oldestMessage.id).fold(
                 onSuccess = { messages ->
                     _state.update {
                         it.copy(
@@ -230,7 +231,6 @@ class ChatViewModel(
 
     fun onMessageTextChanged(text: String) {
         _state.update { it.copy(messageText = text) }
-        // Send typing indicator when user starts typing
         if (text.isNotEmpty()) {
             sendTypingIndicator()
         }
@@ -240,7 +240,6 @@ class ChatViewModel(
 
     private fun sendTypingIndicator() {
         val now = currentTimeMillis()
-        // Send typing at most once every 3 seconds
         if (now - lastTypingSentTime > 3000) {
             lastTypingSentTime = now
             messageRepository.sendTypingIndicator(chatId)
@@ -249,11 +248,9 @@ class ChatViewModel(
 
     fun onTypingReceived(userName: String?) {
         _state.update { it.copy(isTyping = true, typingUserName = userName) }
-        // Cancel previous typing timeout
         typingJob?.cancel()
-        // Clear typing after 4 seconds
         typingJob = scope.launch {
-            kotlinx.coroutines.delay(4000)
+            delay(4000)
             _state.update { it.copy(isTyping = false, typingUserName = null) }
         }
     }
@@ -269,7 +266,7 @@ class ChatViewModel(
         _state.update { it.copy(isSending = true, messageText = "") }
 
         scope.launch {
-            messageRepository.sendMessage(chatId, text).fold(
+            sendMessageUseCase.execute(chatId, text).fold(
                 onSuccess = {
                     _state.update { it.copy(isSending = false) }
                     _events.emit(ChatEvent.MessageSent)
@@ -278,7 +275,7 @@ class ChatViewModel(
                     _state.update {
                         it.copy(
                             isSending = false,
-                            messageText = text // Restore text on failure
+                            messageText = text
                         )
                     }
                     _events.emit(ChatEvent.Error(e.message ?: "Ошибка отправки"))
@@ -289,7 +286,7 @@ class ChatViewModel(
 
     fun deleteMessage(messageId: String) {
         scope.launch {
-            messageRepository.deleteMessage(chatId, messageId).onFailure { e ->
+            deleteMessageUseCase.execute(chatId, messageId).onFailure { e ->
                 _events.emit(ChatEvent.Error(e.message ?: "Ошибка удаления"))
             }
         }
@@ -302,11 +299,9 @@ class ChatViewModel(
     fun markAsRead() {
         val lastMessage = _state.value.messages.firstOrNull() ?: return
         scope.launch {
-            messageRepository.markAsRead(chatId, lastMessage.id)
+            markAsReadUseCase.execute(chatId, lastMessage.id)
         }
     }
-
-    // ===== Video Bubble =====
 
     fun startRecording() {
         _state.update { it.copy(isRecording = true) }
@@ -320,12 +315,12 @@ class ChatViewModel(
         _state.update { it.copy(isRecording = false, isUploading = true, uploadProgress = 0f) }
 
         scope.launch {
-            messageRepository.sendVideoBubble(
+            sendVideoBubbleUseCase.execute(
                 chatId = chatId,
                 localFileName = fileName,
                 localFilePath = filePath,
                 fileSize = fileSize,
-                durationMs = null, // TODO: Get duration from video
+                durationMs = null,
                 onProgress = { progress ->
                     _state.update { it.copy(uploadProgress = progress) }
                 }

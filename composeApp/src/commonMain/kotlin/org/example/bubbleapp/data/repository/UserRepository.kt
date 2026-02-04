@@ -1,41 +1,25 @@
 package org.example.bubbleapp.data.repository
 
-import org.example.bubbleapp.data.api.ApiClient
-import org.example.bubbleapp.data.api.ApiException
+import org.example.bubbleapp.data.datasource.remote.UserRemoteDataSource
 import org.example.bubbleapp.data.model.User
 
 class UserRepository(
-    private val apiClient: ApiClient
+    private val userRemoteDataSource: UserRemoteDataSource
 ) {
-    // Cache for user profiles
     private val userCache = mutableMapOf<String, User>()
 
-    suspend fun searchByPhone(phone: String): Result<List<User>> {
-        return try {
-            val users = apiClient.searchUsers(phone)
-            // Cache found users
-            users.forEach { userCache[it.id] = it }
-            Result.success(users)
-        } catch (e: ApiException) {
-            Result.failure(Exception(e.error.error))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun searchByPhone(phone: String): List<User> {
+        val users = userRemoteDataSource.searchUsers(phone)
+        users.forEach { userCache[it.id] = it }
+        return users
     }
 
-    suspend fun getUser(userId: String): Result<User> {
-        // Check cache first
-        userCache[userId]?.let { return Result.success(it) }
+    suspend fun getUser(userId: String): User {
+        userCache[userId]?.let { return it }
 
-        return try {
-            val user = apiClient.getUser(userId)
-            userCache[userId] = user
-            Result.success(user)
-        } catch (e: ApiException) {
-            Result.failure(Exception(e.error.error))
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        val user = userRemoteDataSource.getUser(userId)
+        userCache[userId] = user
+        return user
     }
 
     fun getCached(userId: String): User? = userCache[userId]

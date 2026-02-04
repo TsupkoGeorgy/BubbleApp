@@ -5,8 +5,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.example.bubbleapp.data.auth.AuthResult
-import org.example.bubbleapp.data.auth.AuthService
+import org.example.bubbleapp.domain.usecase.auth.SendCodeUseCase
+import org.example.bubbleapp.domain.usecase.auth.UpdateProfileUseCase
+import org.example.bubbleapp.domain.usecase.auth.VerifyCodeUseCase
 
 data class PhoneInputState(
     val phone: String = "+7",
@@ -35,30 +36,26 @@ sealed class AuthEvent {
 }
 
 class AuthViewModel(
-    private val authService: AuthService,
+    private val sendCodeUseCase: SendCodeUseCase,
+    private val verifyCodeUseCase: VerifyCodeUseCase,
+    private val updateProfileUseCase: UpdateProfileUseCase,
     private val scope: CoroutineScope
 ) {
-    // Phone Input State
     private val _phoneState = MutableStateFlow(PhoneInputState())
     val phoneState: StateFlow<PhoneInputState> = _phoneState
 
-    // Code Verify State
     private val _codeState = MutableStateFlow(CodeVerifyState())
     val codeState: StateFlow<CodeVerifyState> = _codeState
 
-    // Profile Setup State
     private val _profileState = MutableStateFlow(ProfileSetupState())
     val profileState: StateFlow<ProfileSetupState> = _profileState
 
-    // Events (one-time)
     private val _events = MutableStateFlow<AuthEvent?>(null)
     val events: StateFlow<AuthEvent?> = _events
 
     fun clearEvent() {
         _events.value = null
     }
-
-    // ===== Phone Input =====
 
     fun onPhoneChanged(phone: String) {
         val filtered = phone.filter { it.isDigit() || (it == '+' && phone.indexOf(it) == 0) }
@@ -75,9 +72,7 @@ class AuthViewModel(
         _phoneState.update { it.copy(isLoading = true, errorMessage = null) }
 
         scope.launch {
-            val result = authService.sendCode(phone)
-
-            result.fold(
+            sendCodeUseCase.execute(phone).fold(
                 onSuccess = {
                     _codeState.update { it.copy(phone = phone) }
                     _events.value = AuthEvent.CodeSent(phone)
@@ -95,13 +90,10 @@ class AuthViewModel(
         }
     }
 
-    // ===== Code Verify =====
-
     fun onCodeChanged(code: String) {
         val filtered = code.filter { it.isDigit() }.take(6)
         _codeState.update { it.copy(code = filtered, errorMessage = null) }
 
-        // Auto-verify when 4 digits
         if (filtered.length == 4 && !_codeState.value.isLoading) {
             verifyCode()
         }
@@ -114,23 +106,18 @@ class AuthViewModel(
         _codeState.update { it.copy(isLoading = true, errorMessage = null) }
 
         scope.launch {
-            val result = authService.verifyCode(state.phone, state.code)
-
-            when (result) {
-                is AuthResult.Success -> {
+            verifyCodeUseCase.execute(state.phone, state.code).fold(
+                onSuccess = { result ->
                     _events.value = AuthEvent.Verified(result.isNewUser)
-                    // Don't reset loading - screen will change
-                }
-                is AuthResult.Error -> {
+                },
+                onFailure = { e ->
                     _codeState.update {
-                        it.copy(isLoading = false, errorMessage = result.message)
+                        it.copy(isLoading = false, errorMessage = e.message ?: "Ошибка верификации")
                     }
                 }
-            }
+            )
         }
     }
-
-    // ===== Profile Setup =====
 
     fun onDisplayNameChanged(name: String) {
         _profileState.update { it.copy(displayName = name, errorMessage = null) }
@@ -151,12 +138,10 @@ class AuthViewModel(
         _profileState.update { it.copy(isLoading = true, errorMessage = null) }
 
         scope.launch {
-            val result = authService.updateProfile(
+            updateProfileUseCase.execute(
                 username = state.username.takeIf { it.isNotBlank() },
                 displayName = state.displayName.takeIf { it.isNotBlank() }
-            )
-
-            result.fold(
+            ).fold(
                 onSuccess = {
                     _events.value = AuthEvent.ProfileSaved
                 },
@@ -172,8 +157,6 @@ class AuthViewModel(
     fun skipProfile() {
         _events.value = AuthEvent.ProfileSaved
     }
-
-    // ===== Reset =====
 
     fun resetToPhoneInput() {
         _phoneState.value = PhoneInputState()
