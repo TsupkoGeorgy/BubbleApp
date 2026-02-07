@@ -6,6 +6,7 @@ import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
+import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
@@ -118,6 +119,23 @@ class ApiClient(
             parameter("phone", query)
         }.checkError().body()
         return response.users
+    }
+
+    suspend fun uploadAvatar(imageData: ByteArray, fileName: String): User {
+        return client.post("$baseUrl/users/me/avatar") {
+            auth()
+            contentType(ContentType.MultiPart.FormData)
+            setBody(
+                io.ktor.client.request.forms.MultiPartFormDataContent(
+                    io.ktor.client.request.forms.formData {
+                        append("file", imageData, io.ktor.http.Headers.build {
+                            append(HttpHeaders.ContentType, "image/jpeg")
+                            append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
+                        })
+                    }
+                )
+            )
+        }.checkError().body()
     }
 
     // ===== CHAT =====

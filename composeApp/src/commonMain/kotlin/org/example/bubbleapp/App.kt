@@ -64,6 +64,8 @@ import org.example.bubbleapp.ui.auth.CodeVerifyScreen
 import org.example.bubbleapp.ui.auth.ProfileSetupScreen
 import org.example.bubbleapp.ui.chat.ChatScreen
 import org.example.bubbleapp.ui.chat.ChatsListScreen
+import org.example.bubbleapp.ui.profile.MyProfileScreen
+import org.example.bubbleapp.ui.profile.UserProfileScreen
 import kotlin.math.PI
 import kotlin.math.atan2
 
@@ -79,6 +81,9 @@ sealed class Screen {
     object Calls : Screen()
     object Chats : Screen()
     data class Chat(val chatId: String) : Screen()
+    // Profile
+    object MyProfile : Screen()
+    data class UserProfile(val userId: String) : Screen()
 }
 
 // Состояние транскрипции
@@ -169,12 +174,7 @@ fun App() {
                     onNavigateToBubbles = { currentScreen = Screen.Bubbles },
                     onNavigateToCalls = { currentScreen = Screen.Calls },
                     onNavigateToChats = { currentScreen = Screen.Chats },
-                    onLogout = {
-                        scope.launch {
-                            appState.logout()
-                            currentScreen = Screen.PhoneInput
-                        }
-                    }
+                    onNavigateToProfile = { currentScreen = Screen.MyProfile }
                 )
 
                 Screen.Bubbles -> BubblesScreen(
@@ -199,7 +199,39 @@ fun App() {
                     }
                     ChatScreen(
                         viewModel = chatViewModel,
-                        onBack = { currentScreen = Screen.Chats }
+                        onBack = { currentScreen = Screen.Chats },
+                        onUserProfileClick = { userId ->
+                            currentScreen = Screen.UserProfile(userId)
+                        }
+                    )
+                }
+
+                // Profile screens
+                Screen.MyProfile -> {
+                    val myProfileViewModel = remember {
+                        appState.createMyProfileViewModel()
+                    }
+                    MyProfileScreen(
+                        viewModel = myProfileViewModel,
+                        onBack = { currentScreen = Screen.Home },
+                        onLoggedOut = { currentScreen = Screen.PhoneInput },
+                        onPickImage = { /* Image picker is handled in screen */ }
+                    )
+                }
+
+                is Screen.UserProfile -> {
+                    val userProfileViewModel = remember(screen.userId) {
+                        appState.createUserProfileViewModel(screen.userId)
+                    }
+                    UserProfileScreen(
+                        viewModel = userProfileViewModel,
+                        onBack = { currentScreen = Screen.Chats },
+                        onNavigateToChat = { chatId ->
+                            currentScreen = Screen.Chat(chatId)
+                        },
+                        onNavigateToCall = { userId ->
+                            currentScreen = Screen.Calls
+                        }
                     )
                 }
             }
@@ -212,7 +244,7 @@ fun HomeScreen(
     onNavigateToBubbles: () -> Unit,
     onNavigateToCalls: () -> Unit,
     onNavigateToChats: () -> Unit = {},
-    onLogout: () -> Unit = {}
+    onNavigateToProfile: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -221,16 +253,24 @@ fun HomeScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
             .windowInsetsPadding(WindowInsets.navigationBars)
     ) {
-        // Logout button in top right
-        Text(
-            text = "Выйти",
-            fontSize = 14.sp,
-            color = Color.White.copy(alpha = 0.6f),
+        // Profile icon in top right
+        Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp)
-                .clickable { onLogout() }
-        )
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF6C63FF))
+                .clickable { onNavigateToProfile() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "P",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
 
         Column(
             modifier = Modifier.fillMaxSize(),

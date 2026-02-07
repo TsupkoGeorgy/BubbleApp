@@ -33,7 +33,8 @@ import org.example.bubbleapp.rememberCameraController
 fun ChatScreen(
     viewModel: ChatViewModel,
     onBack: () -> Unit,
-    onCall: () -> Unit = {}
+    onCall: () -> Unit = {},
+    onUserProfileClick: (String) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
@@ -103,7 +104,14 @@ fun ChatScreen(
             typingUserName = state.typingUserName,
             lastSeen = state.lastSeen,
             onBack = onBack,
-            onCall = onCall
+            onCall = onCall,
+            onProfileClick = {
+                // Get partner user ID for private chats
+                val partnerId = viewModel.getPartnerUserId()
+                if (partnerId != null) {
+                    onUserProfileClick(partnerId)
+                }
+            }
         )
 
         // Messages
@@ -243,7 +251,8 @@ private fun ChatHeader(
     typingUserName: String?,
     lastSeen: String?,
     onBack: () -> Unit,
-    onCall: () -> Unit
+    onCall: () -> Unit,
+    onProfileClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -262,8 +271,10 @@ private fun ChatHeader(
         )
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Avatar with online indicator
-        Box {
+        // Avatar with online indicator - clickable
+        Box(
+            modifier = Modifier.clickable { onProfileClick() }
+        ) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -292,7 +303,11 @@ private fun ChatHeader(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onProfileClick() }
+        ) {
             Text(
                 text = chatName,
                 fontSize = 18.sp,

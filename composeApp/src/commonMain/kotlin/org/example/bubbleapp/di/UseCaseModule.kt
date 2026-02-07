@@ -17,8 +17,12 @@ import org.example.bubbleapp.domain.usecase.message.LoadMessagesUseCase
 import org.example.bubbleapp.domain.usecase.message.MarkAsReadUseCase
 import org.example.bubbleapp.domain.usecase.message.SendMessageUseCase
 import org.example.bubbleapp.domain.usecase.message.SendVideoBubbleUseCase
+import org.example.bubbleapp.domain.usecase.user.GetMyProfileUseCase
+import org.example.bubbleapp.domain.usecase.user.GetUserProfileUseCase
 import org.example.bubbleapp.domain.usecase.user.GetUserUseCase
 import org.example.bubbleapp.domain.usecase.user.SearchUsersByPhoneUseCase
+import org.example.bubbleapp.domain.usecase.user.UpdateMyProfileUseCase
+import org.example.bubbleapp.domain.usecase.user.UploadAvatarUseCase
 
 val useCaseModule = DI.Module("useCase") {
     // Auth
@@ -44,4 +48,8 @@ val useCaseModule = DI.Module("useCase") {
     // User
     bindProvider { SearchUsersByPhoneUseCase(instance()) }
     bindProvider { GetUserUseCase(instance()) }
+    bindProvider { GetMyProfileUseCase(instance()) }
+    bindProvider { GetUserProfileUseCase(instance()) }
+    bindProvider { UpdateMyProfileUseCase(instance()) }
+    bindProvider { UploadAvatarUseCase(instance()) }
 }

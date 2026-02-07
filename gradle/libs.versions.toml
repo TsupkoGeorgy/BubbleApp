@@ -19,6 +19,7 @@ springBoot = "3.4.2"
 jackson = "2.18.2"
 serialization = "1.7.3"
 kodein = "7.22.0"
+coil = "3.0.4"
 postgresql = "42.7.4"
 flyway = "10.22.0"
 jjwt = "0.12.6"
@@ -68,6 +69,8 @@ aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "awssdk" }
 springdoc-openapi = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 kodein-di = { module = "org.kodein.di:kodein-di", version.ref = "kodein" }
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

@@ -53,6 +53,10 @@ kotlin {
 
             // Kodein DI
             implementation(libs.kodein.di)
+
+            // Coil for image loading
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor)
         }
 
         iosMain.dependencies {

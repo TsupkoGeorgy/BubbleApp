@@ -21,15 +21,22 @@ import org.example.bubbleapp.di.repositoryModule
 import org.example.bubbleapp.di.useCaseModule
 import org.example.bubbleapp.domain.usecase.auth.InitializeAuthUseCase
 import org.example.bubbleapp.domain.usecase.auth.LogoutUseCase
+import org.example.bubbleapp.domain.usecase.chat.CreateDirectChatUseCase
 import org.example.bubbleapp.domain.usecase.chat.GetChatUseCase
 import org.example.bubbleapp.domain.usecase.message.DeleteMessageUseCase
 import org.example.bubbleapp.domain.usecase.message.LoadMessagesUseCase
 import org.example.bubbleapp.domain.usecase.message.MarkAsReadUseCase
 import org.example.bubbleapp.domain.usecase.message.SendMessageUseCase
 import org.example.bubbleapp.domain.usecase.message.SendVideoBubbleUseCase
+import org.example.bubbleapp.domain.usecase.user.GetMyProfileUseCase
+import org.example.bubbleapp.domain.usecase.user.GetUserProfileUseCase
+import org.example.bubbleapp.domain.usecase.user.UpdateMyProfileUseCase
+import org.example.bubbleapp.domain.usecase.user.UploadAvatarUseCase
 import org.example.bubbleapp.ui.auth.AuthViewModel
 import org.example.bubbleapp.ui.chat.ChatViewModel
 import org.example.bubbleapp.ui.chat.ChatsViewModel
+import org.example.bubbleapp.ui.profile.MyProfileViewModel
+import org.example.bubbleapp.ui.profile.UserProfileViewModel
 
 class AppState(
     private val scope: CoroutineScope,
@@ -37,7 +44,7 @@ class AppState(
 ) : DIAware {
 
     companion object {
-        const val DEFAULT_BASE_URL = "http://192.168.0.199:8080"
+        const val DEFAULT_BASE_URL = "http://192.168.0.143:8080"
         val DEFAULT_WS_URL: String
             get() = DEFAULT_BASE_URL.replace("http://", "ws://") + "/ws/chat"
     }
@@ -106,6 +113,13 @@ class AppState(
     private val initializeAuthUseCase: InitializeAuthUseCase by instance()
     private val logoutUseCase: LogoutUseCase by instance()
 
+    // UseCases for profile ViewModels
+    private val getMyProfileUseCase: GetMyProfileUseCase by instance()
+    private val updateMyProfileUseCase: UpdateMyProfileUseCase by instance()
+    private val uploadAvatarUseCase: UploadAvatarUseCase by instance()
+    private val getUserProfileUseCase: GetUserProfileUseCase by instance()
+    private val createDirectChatUseCase: CreateDirectChatUseCase by instance()
+
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized
 
@@ -150,6 +164,26 @@ class AppState(
             messageRepository = messageRepository,
             scope = coroutineScope,
             webSocketManager = chatWebSocketManager
+        )
+    }
+
+    fun createMyProfileViewModel(): MyProfileViewModel {
+        return MyProfileViewModel(
+            getMyProfileUseCase = getMyProfileUseCase,
+            updateMyProfileUseCase = updateMyProfileUseCase,
+            uploadAvatarUseCase = uploadAvatarUseCase,
+            logoutUseCase = logoutUseCase,
+            authStateHolder = authStateHolder,
+            scope = coroutineScope
+        )
+    }
+
+    fun createUserProfileViewModel(userId: String): UserProfileViewModel {
+        return UserProfileViewModel(
+            userId = userId,
+            getUserProfileUseCase = getUserProfileUseCase,
+            createDirectChatUseCase = createDirectChatUseCase,
+            scope = coroutineScope
         )
     }
 }

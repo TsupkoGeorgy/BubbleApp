@@ -296,6 +296,12 @@ class ChatViewModel(
         return message.effectiveSenderId == currentUserId
     }
 
+    fun getPartnerUserId(): String? {
+        val chat = _state.value.chat ?: return null
+        if (chat.type != "PRIVATE") return null
+        return chat.members.find { it.userId != currentUserId }?.userId
+    }
+
     fun markAsRead() {
         val lastMessage = _state.value.messages.firstOrNull() ?: return
         scope.launch {
